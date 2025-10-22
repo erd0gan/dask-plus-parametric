@@ -42,7 +42,7 @@
 
 ```powershell
 # 1. Repository'yi klonlayın
-git clone https://github.com/[kullanici-adi]/dask-plus-parametrik.git
+git clone https://github.com/erd0gan/dask-plus-parametrik.git
 cd dask-plus-parametrik
 
 # 2. Virtual environment oluşturun
@@ -200,9 +200,9 @@ UI-Latest/
 
 | Paket | Teminat | PGA Eşikleri | Ödeme Süresi | Prim Oranı |
 |-------|---------|--------------|--------------|------------|
-| 🥉 **Temel** | 250,000 TL | 0.10g / 0.20g / 0.35g | 14 gün | %1.0 + risk |
-| 🥈 **Standard** | 750,000 TL | 0.12g / 0.25g / 0.40g | 14 gün | %1.0 + risk |
-| 🥇 **Premium** | 1,500,000 TL | 0.15g / 0.30g / 0.50g | 10 gün | %1.0 + risk |
+| 🥉 **Temel** | 250,000 TL | 0.10g / 0.20g / 0.35g | 14 gün | %1.0 ± risk |
+| 🥈 **Standard** | 750,000 TL | 0.12g / 0.25g / 0.40g | 14 gün | %1.0 ± risk |
+| 🥇 **Premium** | 1,500,000 TL | 0.15g / 0.30g / 0.50g | 10 gün | %1.0 ± risk |
 
 #### Risk Faktörleri (8 Parametre)
 
@@ -330,7 +330,7 @@ Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICE
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/[username]/dask-plus-parametrik.git
+git clone https://github.com/erd0gan/dask-plus-parametrik.git
 cd dask-plus-parametrik
 
 # 2. Create virtual environment
@@ -402,9 +402,9 @@ Password: dask2024
 
 | Package | Coverage | PGA Thresholds | Payout Time | Premium Rate |
 |---------|----------|----------------|-------------|--------------|
-| 🥉 **Basic** | 250,000 TL | 0.10g / 0.20g / 0.35g | 14 days | 1.0% + risk |
-| 🥈 **Standard** | 750,000 TL | 0.12g / 0.25g / 0.40g | 14 days | 1.0% + risk |
-| 🥇 **Premium** | 1,500,000 TL | 0.15g / 0.30g / 0.50g | 10 days | 1.0% + risk |
+| 🥉 **Basic** | 250,000 TL | 0.10g / 0.20g / 0.35g | 14 days | 1.0% ± risk |
+| 🥈 **Standard** | 750,000 TL | 0.12g / 0.25g / 0.40g | 14 days | 1.0% ± risk |
+| 🥇 **Premium** | 1,500,000 TL | 0.15g / 0.30g / 0.50g | 10 days | 1.0% ± risk |
 
 ### 🧪 Testing
 
@@ -444,4 +444,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-Made with ❤️ by erd0gan_ & Cruc10 | © 2025 DASK+ Parametric
+Made with ❤️ by erd0gan_ & Crucio4 | © 2025 DASK+ Parametric
