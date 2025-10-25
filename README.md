@@ -444,4 +444,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-Made with ❤️ by erd0gan_ & Crucio4 | © 2025 DASK+ Parametric
+Made with ❤️ by erd0gan_ & crucio4 | © 2025 DASK+ Parametric
