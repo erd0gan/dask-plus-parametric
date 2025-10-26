@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="tr">
 
 <head>
@@ -147,7 +147,7 @@
             </nav>
 
             <div class="absolute bottom-0 w-full p-4 border-t border-gray-700">
-                <button class="w-full flex items-center justify-center px-3 py-2 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 transition-colors" onclick="window.location.href='/'">
+                <button class="w-full flex items-center justify-center px-3 py-2 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 transition-colors">
                     <i class="fas fa-sign-out-alt mr-2"></i> Çıkış Yap
                 </button>
             </div>
@@ -1186,7 +1186,7 @@
             adres: 'İstanbul/Kadıköy',
             teminat: '75,000 TL',
             prim: 680,
-            baslangıç: '2025-01-15',
+            baslangic: '2025-01-15',
             durum: 'Aktif'
         }, {
             no: 'DP25002',
@@ -1792,7 +1792,7 @@
             // Sonraki buton durumu
             nextBtn.disabled = !apiResponse.has_next;
 
-            // Sayfa numarlarını oluştur (max 5 sayfa göster)
+            // Sayfa numaralarını oluştur (max 5 sayfa göster)
             pageNumbersDiv.innerHTML = '';
             let startPage = Math.max(1, page - 2);
             let endPage = Math.min(totalPages, startPage + 4);
@@ -1947,7 +1947,7 @@
             // Sonraki buton durumu
             nextBtn.disabled = !apiResponse.has_next;
 
-            // Sayfa numarlarını oluştur (max 5 sayfa göster)
+            // Sayfa numaralarını oluştur (max 5 sayfa göster)
             pageNumbersDiv.innerHTML = '';
             let startPage = Math.max(1, page - 2);
             let endPage = Math.min(totalPages, startPage + 4);
@@ -2394,230 +2394,6 @@
                 btn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Modeli Yeniden Eğit';
             }
         }
-
-        // --- DEMO SECTION LOGIC ---
-
-        // Türkiye il-ilçe-mahalle verileri
-        const demoLocationData = {
-            "İstanbul": {
-                risk: 1.8,
-                ilceler: {
-                    "Kadıköy": ["Fenerbahçe", "Göztepe", "Moda", "Acıbadem"],
-                    "Beşiktaş": ["Etiler", "Levent", "Ortaköy", "Bebek"],
-                    "Fatih": ["Sultanahmet", "Aksaray", "Çapa", "Kocamustafapaşa"]
-                }
-            },
-            "İzmir": {
-                risk: 1.5,
-                ilceler: {
-                    "Bornova": ["Evka-3", "Erzene", "Doğanlar", "Işıkkent"],
-                    "Çeşme": ["Alaçatı", "Ilıca", "Dalyan", "Germiyan"],
-                    "Karşıyaka": ["Bostanlı", "Mavişehir", "Yamanlar", "Bostanlı"]
-                }
-            },
-            "Ankara": {
-                risk: 1.0,
-                ilceler: {
-                    "Çankaya": ["Kızılay", "Bahçelievler", "Ayrancı", "Çayyolu"],
-                    "Keçiören": ["Esertepe", "Bağlarbaşı", "Aktepe", "Ovacık"],
-                    "Mamak": ["Ege", "Durali Alıç", "Şafak", "Tuzluçayır"]
-                }
-            },
-            "Bursa": {
-                risk: 1.3,
-                ilceler: {
-                    "Nilüfer": ["Görükle", "Ertuğrul", "Balat", "Özlüce"],
-                    "Osmangazi": ["Demirtaş", "Hamitler", "Soğanlı", "Yunuseli"],
-                    "Yıldırım": ["Millet", "Yıldırım", "Güneştepe", "Davutdede"]
-                }
-            },
-            "Tokat": {
-                risk: 1.2,
-                ilceler: {
-                    "Merkez": ["Behzat", "Gülbahar", "Kemaliye", "Meydan"],
-                    "Erbaa": ["Akpınar", "Çalköy", "Karacaören", "Yavu"],
-                    "Turhal": ["Akçaören", "Aydınlık", "Büyükkızılcık", "Sofular"]
-                }
-            }
-        };
-
-        let demoSelectedData = {
-            il: null,
-            ilce: null,
-            mahalle: null,
-            tier: null,
-            amount: null
-        };
-
-        // İl dropdown'unu doldur
-        const demoIlSelect = document.getElementById('demoIlSelect');
-        const demoIlceSelect = document.getElementById('demoIlceSelect');
-        const demoMahalleSelect = document.getElementById('demoMahalleSelect');
-
-        Object.keys(demoLocationData).forEach(il => {
-            const option = document.createElement('option');
-            option.value = il;
-            option.textContent = il;
-            demoIlSelect.appendChild(option);
-        });
-
-        // İl seçildiğinde ilçeleri göster
-        demoIlSelect.addEventListener('change', function() {
-            demoSelectedData.il = this.value;
-            demoIlceSelect.innerHTML = '<option value="">İlçe Seçiniz</option>';
-            demoMahalleSelect.innerHTML = '<option value="">Mahalle Seçiniz</option>';
-            demoMahalleSelect.disabled = true;
-
-            if (this.value) {
-                demoIlceSelect.disabled = false;
-                const ilceler = demoLocationData[this.value].ilceler;
-                Object.keys(ilceler).forEach(ilce => {
-                    const option = document.createElement('option');
-                    option.value = ilce;
-                    option.textContent = ilce;
-                    demoIlceSelect.appendChild(option);
-                });
-            } else {
-                demoIlceSelect.disabled = true;
-            }
-            checkDemoCalculateButton();
-        });
-
-        // İlçe seçildiğinde mahalleleri göster
-        demoIlceSelect.addEventListener('change', function() {
-            demoSelectedData.ilce = this.value;
-            demoMahalleSelect.innerHTML = '<option value="">Mahalle Seçiniz</option>';
-
-            if (this.value && demoSelectedData.il) {
-                demoMahalleSelect.disabled = false;
-                const mahalleler = demoLocationData[demoSelectedData.il].ilceler[this.value];
-                mahalleler.forEach(mahalle => {
-                    const option = document.createElement('option');
-                    option.value = mahalle;
-                    option.textContent = mahalle;
-                    demoMahalleSelect.appendChild(option);
-                });
-            } else {
-                demoMahalleSelect.disabled = true;
-            }
-            checkDemoCalculateButton();
-        });
-
-        // Mahalle seçildiğinde
-        demoMahalleSelect.addEventListener('change', function() {
-            demoSelectedData.mahalle = this.value;
-            checkDemoCalculateButton();
-        });
-
-        // Tier seçimi
-        const demoTierCards = document.querySelectorAll('.demo-tier-card');
-        demoTierCards.forEach(card => {
-            card.addEventListener('click', function() {
-                demoTierCards.forEach(c => c.classList.remove('border-primary', 'border-3', 'bg-green-50'));
-                this.classList.add('border-primary', 'border-3', 'bg-green-50');
-                demoSelectedData.tier = this.dataset.tier;
-                demoSelectedData.amount = this.dataset.amount;
-                checkDemoCalculateButton();
-            });
-        });
-
-        // Hesapla butonunu kontrol et
-        function checkDemoCalculateButton() {
-            const btn = document.getElementById('demoPrimBtn');
-            if (demoSelectedData.il && demoSelectedData.ilce && demoSelectedData.mahalle && demoSelectedData.tier) {
-                btn.disabled = false;
-            } else {
-                btn.disabled = true;
-            }
-        }
-
-        // Prim hesapla
-        document.getElementById('demoPrimBtn').addEventListener('click', async function() {
-            this.disabled = true;
-            this.textContent = 'Hesaplanıyor...';
-
-            try {
-                let packageName = 'temel';
-                if (demoSelectedData.tier === '2') packageName = 'standard';
-                else if (demoSelectedData.tier === '3') packageName = 'premium';
-
-                const response = await fetch('/api/calculate-premium', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        il: demoSelectedData.il,
-                        ilce: demoSelectedData.ilce,
-                        mahalle: demoSelectedData.mahalle,
-                        package: packageName
-                    })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    document.getElementById('demoPrimAmount').textContent =
-                        result.data.premium.toLocaleString('tr-TR') + ' TL';
-                    document.getElementById('demoPrimAddress').textContent = result.data.location;
-                    document.getElementById('demoPrimResult').classList.remove('hidden');
-                    document.getElementById('demoSimulateBtn').disabled = false;
-                } else {
-                    alert('Prim hesaplama hatası: ' + result.message);
-                }
-            } catch (error) {
-                console.error('API hatası:', error);
-                alert('Sunucu ile bağlantı kurulamadı');
-            } finally {
-                this.disabled = false;
-                this.textContent = 'Prim Hesapla';
-            }
-        });
-
-        // Deprem simülasyonu
-        document.getElementById('demoSimulateBtn').addEventListener('click', async function() {
-            this.disabled = true;
-            this.textContent = 'Simülasyon Çalışıyor...';
-
-            const startTime = Date.now();
-
-            try {
-                const response = await fetch('/api/simulate-trigger', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        coverage: parseInt(demoSelectedData.amount),
-                        location: `${demoSelectedData.mahalle}, ${demoSelectedData.ilce}, ${demoSelectedData.il}`
-                    })
-                });
-
-                const result = await response.json();
-
-                if (result.success && result.triggered) {
-                    const endTime = Date.now();
-                    const realProcessingTime = ((endTime - startTime) / 1000).toFixed(2);
-
-                    document.getElementById('demoPayoutAmount').textContent =
-                        result.data.payout_amount.toLocaleString('tr-TR') + ' TL';
-                    document.getElementById('demoPaymentTime').textContent = realProcessingTime;
-                    document.getElementById('demoSimulationResult').classList.remove('hidden');
-
-                    this.textContent = 'Tekrar Simüle Et';
-                } else {
-                    alert('Simülasyon hatası: ' + (result.message || 'Bilinmeyen hata'));
-                }
-            } catch (error) {
-                console.error('API hatası:', error);
-                alert('Sunucu ile bağlantı kurulamadı');
-            } finally {
-                this.disabled = false;
-                if (this.textContent === 'Simülasyon Çalışıyor...') {
-                    this.textContent = 'Simülasyonu Başlat';
-                }
-            }
-        });
 
         // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', () => {

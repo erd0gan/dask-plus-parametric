@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="tr">
 
 <head>
@@ -617,33 +617,55 @@
     </div>
 
     <script>
-        // Müşteri Giriş Modalı
+        // Demo hesap bilgisini veri setinden al
+        const demoAccountData = {
+            email: 'ali.yilmaz0@email.com',
+            password: 'dask2024'
+        };
+
+        // Demo hesap bilgisini sayfaya ekle
+        document.addEventListener('DOMContentLoaded', function() {
+            const demoEmailEl = document.getElementById('demoEmail');
+            const demoPasswordEl = document.getElementById('demoPassword');
+
+            if (demoEmailEl) demoEmailEl.textContent = demoAccountData.email;
+            if (demoPasswordEl) demoPasswordEl.textContent = demoAccountData.password;
+        });
+
+        // Customer Login Modal
         const customerLoginModal = document.getElementById('customerLoginModal');
-        const customerLoginBtn = document.getElementById('customerLoginBtn');
+        const customerLoginBtnNav = document.getElementById('customerLoginBtn');
         const customerLoginClose = document.getElementById('customerLoginClose');
         const customerLoginForm = document.getElementById('customerLoginForm');
         const customerErrorMsg = document.getElementById('customerErrorMessage');
         const customerSuccessMsg = document.getElementById('customerSuccessMessage');
 
-        // Modalı aç
-        customerLoginBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            customerLoginModal.style.display = 'flex';
-            document.getElementById('customerEmail').focus();
-        });
+        // Open modal
+        if (customerLoginBtnNav) {
+            customerLoginBtnNav.addEventListener('click', function(e) {
+                e.preventDefault();
+                customerLoginModal.style.display = 'flex';
+                document.getElementById('customerEmail').focus();
+            });
+        }
 
-        // Modalı kapat
+        // Close modal
         customerLoginClose.addEventListener('click', function() {
             customerLoginModal.style.display = 'none';
+            customerErrorMsg.style.display = 'none';
+            customerSuccessMsg.style.display = 'none';
         });
 
+        // Close on overlay click
         window.addEventListener('click', function(e) {
             if (e.target === customerLoginModal) {
                 customerLoginModal.style.display = 'none';
+                customerErrorMsg.style.display = 'none';
+                customerSuccessMsg.style.display = 'none';
             }
         });
 
-        // Giriş formu submit
+        // Login form submission
         customerLoginForm.addEventListener('submit', function(e) {
             e.preventDefault();
 
@@ -654,57 +676,97 @@
             customerErrorMsg.style.display = 'none';
             customerSuccessMsg.style.display = 'none';
 
+            // Sunucuya API çağrısı yap
             fetch('/api/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    email: email,
-                    password: password
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        password: password
+                    })
                 })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    localStorage.setItem('token', data.token);
-                    localStorage.setItem('customer_id', data.customer.customer_id);
-                    localStorage.setItem('customer_email', email);
-                    localStorage.setItem('customer_name', data.customer.full_name);
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Store token
+                        localStorage.setItem('token', data.token);
+                        localStorage.setItem('customer_id', data.customer.customer_id);
+                        localStorage.setItem('customer_email', email);
+                        localStorage.setItem('customer_name', data.customer.full_name);
 
-                    if (rememberMe) {
-                        localStorage.setItem('rememberMe', 'true');
+                        if (rememberMe) {
+                            localStorage.setItem('rememberMe', 'true');
+                        }
+
+                        customerSuccessMsg.textContent = '✓ Giriş başarılı! Dashboard\'a yönlendiriliyorsunuz...';
+                        customerSuccessMsg.style.display = 'block';
+
+                        setTimeout(() => {
+                            window.location.href = '/dashboard';
+                        }, 1500);
+                    } else {
+                        customerErrorMsg.textContent = '✗ ' + (data.error || 'Giriş başarısız. Lütfen tekrar deneyiniz.');
+                        customerErrorMsg.style.display = 'block';
                     }
-
-                    customerSuccessMsg.textContent = '✓ Giriş başarılı! Dashboard\'a yönlendiriliyorsunuz...';
-                    customerSuccessMsg.style.display = 'block';
-
-                    setTimeout(() => {
-                        window.location.href = '/dashboard';
-                    }, 1500);
-                } else {
-                    customerErrorMsg.textContent = '✗ ' + (data.error || 'Giriş başarısız. Lütfen tekrar deneyiniz.');
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    customerErrorMsg.textContent = '✗ Bir hata oluştu. Lütfen tekrar deneyiniz.';
                     customerErrorMsg.style.display = 'block';
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                customerErrorMsg.textContent = '✗ Bir hata oluştu. Lütfen tekrar deneyiniz.';
-                customerErrorMsg.style.display = 'block';
+                });
+        });
+
+        // Hamburger menu
+        const hamburger = document.getElementById('hamburger');
+        const navLinks = document.querySelector('.nav-links');
+
+        hamburger.addEventListener('click', function() {
+            navLinks.classList.toggle('active');
+            this.classList.toggle('active');
+        });
+
+        // Nav link'lere tıklandığında menüyü kapat
+        document.querySelectorAll('.nav-links a').forEach(link => {
+            link.addEventListener('click', function() {
+                navLinks.classList.remove('active');
+                hamburger.classList.remove('active');
             });
         });
 
-        // Admin Giriş Modalı
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href');
+                if (targetId === '#') return;
+
+                const targetElement = document.querySelector(targetId);
+                if (targetElement) {
+                    const headerOffset = 107; // topbar (37px) + header (70px)
+                    const elementPosition = targetElement.getBoundingClientRect().top;
+                    const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+                    window.scrollTo({
+                        top: offsetPosition,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+
+        // Admin Modal
         const adminModal = document.getElementById('adminModal');
         const adminBtn = document.getElementById('adminBtn');
-        const closeBtn = document.querySelector('.close');
+        const closeModal = document.querySelector('.close');
 
         adminBtn.addEventListener('click', function(e) {
             e.preventDefault();
             adminModal.classList.add('show');
         });
 
-        closeBtn.addEventListener('click', function() {
+        closeModal.addEventListener('click', function() {
             adminModal.classList.remove('show');
         });
 
@@ -716,6 +778,7 @@
 
         document.getElementById('adminLoginForm').addEventListener('submit', function(e) {
             e.preventDefault();
+            // Basit doğrulama (gerçek uygulamada backend'de yapılmalı)
             const username = this.querySelector('input[type="text"]').value;
             const password = this.querySelector('input[type="password"]').value;
 
@@ -726,45 +789,7 @@
             }
         });
 
-        // Hamburger Menu
-        const hamburger = document.getElementById('hamburger');
-        const navLinks = document.querySelector('.nav-links');
-
-        hamburger.addEventListener('click', function() {
-            navLinks.classList.toggle('active');
-            this.classList.toggle('active');
-        });
-
-        // Nav linklerine tıklandığında menüyü kapat
-        document.querySelectorAll('.nav-links a').forEach(link => {
-            link.addEventListener('click', function() {
-                navLinks.classList.remove('active');
-                hamburger.classList.remove('active');
-            });
-        });
-
-        // Smooth Scrolling
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function(e) {
-                const href = this.getAttribute('href');
-                if (href === '#') return;
-
-                e.preventDefault();
-                const target = document.querySelector(href);
-                if (target) {
-                    const headerOffset = 107;
-                    const elementPosition = target.getBoundingClientRect().top;
-                    const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-
-                    window.scrollTo({
-                        top: offsetPosition,
-                        behavior: 'smooth'
-                    });
-                }
-            });
-        });
-
-        // Scroll Animations
+        // Scroll animations
         const observerOptions = {
             threshold: 0.1,
             rootMargin: '0px 0px -50px 0px'
@@ -779,6 +804,7 @@
             });
         }, observerOptions);
 
+        // Animate elements on scroll
         document.querySelectorAll('.feature-card, .stat-card, .process-step, .pricing-card, .faq-item').forEach(el => {
             el.style.opacity = '0';
             el.style.transform = 'translateY(30px)';
@@ -786,28 +812,90 @@
             observer.observe(el);
         });
 
-        // FAQ Accordion
-        document.querySelectorAll('.faq-question').forEach(button => {
-            button.addEventListener('click', function() {
-                const faqItem = this.parentElement;
-                faqItem.classList.toggle('active');
+        // Customer Login Modal
+        const customerLoginModal = document.getElementById('customerLoginModal');
+        const customerLoginBtnNav = document.getElementById('customerLoginBtn');
+        const customerLoginClose = document.getElementById('customerLoginClose');
+        const customerLoginForm = document.getElementById('customerLoginForm');
+        const customerErrorMsg = document.getElementById('customerErrorMessage');
+        const customerSuccessMsg = document.getElementById('customerSuccessMessage');
+
+        // Open modal
+        if (customerLoginBtnNav) {
+            customerLoginBtnNav.addEventListener('click', function(e) {
+                e.preventDefault();
+                customerLoginModal.style.display = 'flex';
+                document.getElementById('customerEmail').focus();
             });
+        }
+
+        // Close modal
+        customerLoginClose.addEventListener('click', function() {
+            customerLoginModal.style.display = 'none';
+            customerErrorMsg.style.display = 'none';
+            customerSuccessMsg.style.display = 'none';
         });
 
-        // Contact Form
-        document.getElementById('contactForm').addEventListener('submit', function(e) {
+        // Close on overlay click
+        window.addEventListener('click', function(e) {
+            if (e.target === customerLoginModal) {
+                customerLoginModal.style.display = 'none';
+                customerErrorMsg.style.display = 'none';
+                customerSuccessMsg.style.display = 'none';
+            }
+        });
+
+        // Login form submission
+        customerLoginForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            alert('Mesajınız alındı! En kısa sürede size dönüş yapacağız.');
-            this.reset();
-        });
 
-        // Demo Account Display
-        document.addEventListener('DOMContentLoaded', function() {
-            const demoEmailEl = document.getElementById('demoEmail');
-            const demoPasswordEl = document.getElementById('demoPassword');
+            const email = document.getElementById('customerEmail').value;
+            const password = document.getElementById('customerPassword').value;
+            const rememberMe = document.getElementById('customerRemember').checked;
 
-            if (demoEmailEl) demoEmailEl.textContent = 'ali.yilmaz0@email.com';
-            if (demoPasswordEl) demoPasswordEl.textContent = 'dask2024';
+            customerErrorMsg.style.display = 'none';
+            customerSuccessMsg.style.display = 'none';
+
+            // Sunucuya API çağrısı yap
+            fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        password: password
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Store token
+                        localStorage.setItem('token', data.token);
+                        localStorage.setItem('customer_id', data.customer.customer_id);
+                        localStorage.setItem('customer_email', email);
+                        localStorage.setItem('customer_name', data.customer.full_name);
+
+                        if (rememberMe) {
+                            localStorage.setItem('rememberMe', 'true');
+                        }
+
+                        customerSuccessMsg.textContent = '✓ Giriş başarılı! Dashboard\'a yönlendiriliyorsunuz...';
+                        customerSuccessMsg.style.display = 'block';
+
+                        setTimeout(() => {
+                            window.location.href = '/dashboard';
+                        }, 1500);
+                    } else {
+                        customerErrorMsg.textContent = '✗ ' + (data.error || 'Giriş başarısız. Lütfen tekrar deneyiniz.');
+                        customerErrorMsg.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    customerErrorMsg.textContent = '✗ Bir hata oluştu. Lütfen tekrar deneyiniz.';
+                    customerErrorMsg.style.display = 'block';
+                });
         });
     </script>
 </body>

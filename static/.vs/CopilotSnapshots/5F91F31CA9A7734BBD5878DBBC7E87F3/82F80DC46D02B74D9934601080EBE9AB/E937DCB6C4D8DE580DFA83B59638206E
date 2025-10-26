@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="tr">
 
 <head>
@@ -105,7 +105,7 @@
                         Eksper beklemeden, evrak olmadan, sadece Kandilli Rasathanesi verileriyle tetiklenen, önceden belirlenmiş nakit ödemeniz 72 saat içinde hesabınızda. DASK'ın boşluklarını dolduran yeni nesil güvence.
                     </p>
                     <div class="hero-buttons">
-                        <a href="#coverage" class="cta-button primary">Fiyat Teklifi Al</a>
+                        <a href="#demo" class="cta-button primary">Fiyat Teklifi Al</a>
                         <a href="#how-it-works" class="cta-button secondary">Nasıl Çalışır?</a>
                     </div>
 
@@ -371,7 +371,7 @@
                             <strong>1,500 TL'den başlayan fiyatlarla*</strong>
                         </div>
 
-                        <a href="#coverage" class="pricing-button">Fiyat Teklifi Al</a>
+                        <a href="#demo" class="pricing-button">Fiyat Teklifi Al</a>
                     </div>
 
                     <div class="pricing-card featured">
@@ -397,7 +397,7 @@
                             <strong>3,000 TL'den başlayan fiyatlarla*</strong>
                         </div>
 
-                        <a href="#coverage" class="pricing-button">Fiyat Teklifi Al</a>
+                        <a href="#demo" class="pricing-button">Fiyat Teklifi Al</a>
                     </div>
 
                     <div class="pricing-card">
@@ -423,7 +423,7 @@
                             <strong>6,000 TL'den başlayan fiyatlarla*</strong>
                         </div>
 
-                        <a href="#coverage" class="pricing-button">Fiyat Teklifi Al</a>
+                        <a href="#demo" class="pricing-button">Fiyat Teklifi Al</a>
                     </div>
                 </div>
 
@@ -617,94 +617,350 @@
     </div>
 
     <script>
-        // Müşteri Giriş Modalı
-        const customerLoginModal = document.getElementById('customerLoginModal');
-        const customerLoginBtn = document.getElementById('customerLoginBtn');
-        const customerLoginClose = document.getElementById('customerLoginClose');
-        const customerLoginForm = document.getElementById('customerLoginForm');
-        const customerErrorMsg = document.getElementById('customerErrorMessage');
-        const customerSuccessMsg = document.getElementById('customerSuccessMessage');
+        // Demo hesap bilgisini veri setinden al
+        const demoAccountData = {
+            email: 'ali.yilmaz0@email.com',
+            password: 'dask2024'
+        };
 
-        // Modalı aç
-        customerLoginBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            customerLoginModal.style.display = 'flex';
-            document.getElementById('customerEmail').focus();
+        // Demo hesap bilgisini sayfaya ekle
+        document.addEventListener('DOMContentLoaded', function() {
+            const demoEmailEl = document.getElementById('demoEmail');
+            const demoPasswordEl = document.getElementById('demoPassword');
+
+            if (demoEmailEl) demoEmailEl.textContent = demoAccountData.email;
+            if (demoPasswordEl) demoPasswordEl.textContent = demoAccountData.password;
         });
 
-        // Modalı kapat
-        customerLoginClose.addEventListener('click', function() {
-            customerLoginModal.style.display = 'none';
-        });
-
-        window.addEventListener('click', function(e) {
-            if (e.target === customerLoginModal) {
-                customerLoginModal.style.display = 'none';
-            }
-        });
-
-        // Giriş formu submit
-        customerLoginForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-
-            const email = document.getElementById('customerEmail').value;
-            const password = document.getElementById('customerPassword').value;
-            const rememberMe = document.getElementById('customerRemember').checked;
-
-            customerErrorMsg.style.display = 'none';
-            customerSuccessMsg.style.display = 'none';
-
-            fetch('/api/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    email: email,
-                    password: password
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    localStorage.setItem('token', data.token);
-                    localStorage.setItem('customer_id', data.customer.customer_id);
-                    localStorage.setItem('customer_email', email);
-                    localStorage.setItem('customer_name', data.customer.full_name);
-
-                    if (rememberMe) {
-                        localStorage.setItem('rememberMe', 'true');
-                    }
-
-                    customerSuccessMsg.textContent = '✓ Giriş başarılı! Dashboard\'a yönlendiriliyorsunuz...';
-                    customerSuccessMsg.style.display = 'block';
-
-                    setTimeout(() => {
-                        window.location.href = '/dashboard';
-                    }, 1500);
-                } else {
-                    customerErrorMsg.textContent = '✗ ' + (data.error || 'Giriş başarısız. Lütfen tekrar deneyiniz.');
-                    customerErrorMsg.style.display = 'block';
+        // Türkiye il-ilçe-mahalle verileri (simülasyon)
+        const locationData = {
+            "İstanbul": {
+                risk: 1.8,
+                ilceler: {
+                    "Kadıköy": ["Fenerbahçe", "Göztepe", "Moda", "Acıbadem"],
+                    "Beşiktaş": ["Etiler", "Levent", "Ortaköy", "Bebek"],
+                    "Fatih": ["Sultanahmet", "Aksaray", "Çapa", "Kocamustafapaşa"]
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                customerErrorMsg.textContent = '✗ Bir hata oluştu. Lütfen tekrar deneyiniz.';
-                customerErrorMsg.style.display = 'block';
+            },
+            "İzmir": {
+                risk: 1.5,
+                ilceler: {
+                    "Bornova": ["Evka-3", "Erzene", "Doğanlar", "Işıkkent"],
+                    "Çeşme": ["Alaçatı", "Ilıca", "Dalyan", "Germiyan"],
+                    "Karşıyaka": ["Bostanlı", "Mavişehir", "Yamanlar", "Bostanlı"]
+                }
+            },
+            "Ankara": {
+                risk: 1.0,
+                ilceler: {
+                    "Çankaya": ["Kızılay", "Bahçelievler", "Ayrancı", "Çayyolu"],
+                    "Keçiören": ["Esertepe", "Bağlarbaşı", "Aktepe", "Ovacık"],
+                    "Mamak": ["Ege", "Durali Alıç", "Şafak", "Tuzluçayır"]
+                }
+            },
+            "Bursa": {
+                risk: 1.3,
+                ilceler: {
+                    "Nilüfer": ["Görükle", "Ertuğrul", "Balat", "Özlüce"],
+                    "Osmangazi": ["Demirtaş", "Hamitler", "Soğanlı", "Yunuseli"],
+                    "Yıldırım": ["Millet", "Yıldırım", "Güneştepe", "Davutdede"]
+                }
+            },
+            "Tokat": {
+                risk: 1.2,
+                ilceler: {
+                    "Merkez": ["Behzat", "Gülbahar", "Kemaliye", "Meydan"],
+                    "Erbaa": ["Akpınar", "Çalköy", "Karacaören", "Yavu"],
+                    "Turhal": ["Akçaören", "Aydınlık", "Büyükkızılcık", "Sofular"]
+                }
+            }
+        };
+
+        let selectedData = {
+            il: null,
+            ilce: null,
+            mahalle: null,
+            tier: null,
+            amount: null
+        };
+
+        // İl dropdown'unu doldur
+        const ilSelect = document.getElementById('ilSelect');
+        const ilceSelect = document.getElementById('ilceSelect');
+        const mahalleSelect = document.getElementById('mahalleSelect');
+
+        Object.keys(locationData).forEach(il => {
+            const option = document.createElement('option');
+            option.value = il;
+            option.textContent = il;
+            ilSelect.appendChild(option);
+        });
+
+        // İl seçildiğinde ilçeleri göster
+        ilSelect.addEventListener('change', function() {
+            selectedData.il = this.value;
+            ilceSelect.innerHTML = '<option value="">İlçe Seçiniz</option>';
+            mahalleSelect.innerHTML = '<option value="">Mahalle Seçiniz</option>';
+            mahalleSelect.disabled = true;
+
+            if (this.value) {
+                ilceSelect.disabled = false;
+                const ilceler = locationData[this.value].ilceler;
+                Object.keys(ilceler).forEach(ilce => {
+                    const option = document.createElement('option');
+                    option.value = ilce;
+                    option.textContent = ilce;
+                    ilceSelect.appendChild(option);
+                });
+            } else {
+                ilceSelect.disabled = true;
+            }
+            checkCalculateButton();
+        });
+
+        // İlçe seçildiğinde mahalleleri göster
+        ilceSelect.addEventListener('change', function() {
+            selectedData.ilce = this.value;
+            mahalleSelect.innerHTML = '<option value="">Mahalle Seçiniz</option>';
+
+            if (this.value && selectedData.il) {
+                mahalleSelect.disabled = false;
+                const mahalleler = locationData[selectedData.il].ilceler[this.value];
+                mahalleler.forEach(mahalle => {
+                    const option = document.createElement('option');
+                    option.value = mahalle;
+                    option.textContent = mahalle;
+                    mahalleSelect.appendChild(option);
+                });
+            } else {
+                mahalleSelect.disabled = true;
+            }
+            checkCalculateButton();
+        });
+
+        // Mahalle seçildiğinde
+        mahalleSelect.addEventListener('change', function() {
+            selectedData.mahalle = this.value;
+            checkCalculateButton();
+        });
+
+        // Tier seçimi
+        const tierCards = document.querySelectorAll('.tier-card');
+        tierCards.forEach(card => {
+            card.addEventListener('click', function() {
+                tierCards.forEach(c => c.classList.remove('selected'));
+                this.classList.add('selected');
+                selectedData.tier = this.dataset.tier;
+                selectedData.amount = this.dataset.amount;
+                checkCalculateButton();
             });
         });
 
-        // Admin Giriş Modalı
+        // Hesapla butonunu kontrol et
+        function checkCalculateButton() {
+            const btn = document.getElementById('calculatePrimBtn');
+            if (selectedData.il && selectedData.ilce && selectedData.mahalle && selectedData.tier) {
+                btn.disabled = false;
+            } else {
+                btn.disabled = true;
+            }
+        }
+
+        // Prim hesapla (Backend API çağrısı ile)
+        document.getElementById('calculatePrimBtn').addEventListener('click', async function() {
+            this.disabled = true;
+            this.textContent = 'Hesaplanıyor...';
+
+            try {
+                // Tier'a göre paket adı belirle
+                let packageName = 'temel';
+                if (selectedData.tier === '2') packageName = 'standard';
+                else if (selectedData.tier === '3') packageName = 'premium';
+
+                const response = await fetch('/api/calculate-premium', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        il: selectedData.il,
+                        ilce: selectedData.ilce,
+                        mahalle: selectedData.mahalle,
+                        package: packageName
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    document.getElementById('primAmount').textContent =
+                        result.data.premium.toLocaleString('tr-TR') + ' TL';
+                    document.getElementById('selectedAddress').textContent = result.data.location;
+                    document.getElementById('primResult').style.display = 'block';
+                    document.getElementById('simulateBtn').disabled = false;
+
+                    // Smooth scroll to result
+                    document.getElementById('primResult').scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'nearest'
+                    });
+                } else {
+                    alert('Prim hesaplama hatası: ' + result.message);
+                }
+            } catch (error) {
+                console.error('API hatası:', error);
+                alert('Sunucu ile bağlantı kurulamadı');
+            } finally {
+                this.disabled = false;
+                this.textContent = 'Prim Hesapla';
+            }
+        });
+
+        // Deprem simülasyonu (Backend API çağrısı ile)
+        document.getElementById('simulateBtn').addEventListener('click', async function() {
+            this.disabled = true;
+            this.textContent = 'Simülasyon Çalışıyor...';
+
+            const startTime = Date.now();
+
+            try {
+                const response = await fetch('/api/simulate-trigger', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        coverage: parseInt(selectedData.amount),
+                        location: `${selectedData.mahalle}, ${selectedData.ilce}, ${selectedData.il}`
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success && result.triggered) {
+                    const endTime = Date.now();
+                    const realProcessingTime = ((endTime - startTime) / 1000).toFixed(2);
+
+                    document.getElementById('payoutAmount').textContent =
+                        result.data.payout_amount.toLocaleString('tr-TR') + ' TL';
+                    document.getElementById('paymentTime').textContent = realProcessingTime;
+                    document.getElementById('simulationResult').style.display = 'block';
+
+                    this.textContent = 'Tekrar Simüle Et';
+
+                    // Smooth scroll to result
+                    document.getElementById('simulationResult').scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'nearest'
+                    });
+                } else {
+                    alert('Simülasyon hatası: ' + (result.message || 'Bilinmeyen hata'));
+                }
+            } catch (error) {
+                console.error('API hatası:', error);
+                alert('Sunucu ile bağlantı kurulamadı');
+            } finally {
+                this.disabled = false;
+                if (this.textContent === 'Simülasyon Çalışıyor...') {
+                    this.textContent = 'Deprem Simülasyonu Başlat';
+                }
+            }
+        });
+
+        // Accordion işlevselliği
+        const accordionButtons = document.querySelectorAll('.accordion-button');
+        accordionButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const item = this.parentElement;
+                const isActive = item.classList.contains('active');
+
+                // Tüm accordion'ları kapat
+                document.querySelectorAll('.accordion-item').forEach(i => {
+                    i.classList.remove('active');
+                });
+
+                // Tıklanan item'ı aç (eğer kapalıysa)
+                if (!isActive) {
+                    item.classList.add('active');
+                }
+            });
+        });
+
+        // FAQ accordion işlevselliği
+        const faqButtons = document.querySelectorAll('.faq-question');
+        faqButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const item = this.parentElement;
+                const isActive = item.classList.contains('active');
+
+                // Tüm FAQ'ları kapat
+                document.querySelectorAll('.faq-item').forEach(i => {
+                    i.classList.remove('active');
+                });
+
+                // Tıklanan item'ı aç (eğer kapalıysa)
+                if (!isActive) {
+                    item.classList.add('active');
+                }
+            });
+        });
+
+        // Contact form
+        document.getElementById('contactForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            alert('Mesajınız alındı! En kısa sürede size dönüş yapacağız.');
+            this.reset();
+        });
+
+        // Hamburger menu
+        const hamburger = document.getElementById('hamburger');
+        const navLinks = document.querySelector('.nav-links');
+
+        hamburger.addEventListener('click', function() {
+            navLinks.classList.toggle('active');
+            this.classList.toggle('active');
+        });
+
+        // Nav link'lere tıklandığında menüyü kapat
+        document.querySelectorAll('.nav-links a').forEach(link => {
+            link.addEventListener('click', function() {
+                navLinks.classList.remove('active');
+                hamburger.classList.remove('active');
+            });
+        });
+
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href');
+                if (targetId === '#') return;
+
+                const targetElement = document.querySelector(targetId);
+                if (targetElement) {
+                    const headerOffset = 107; // topbar (37px) + header (70px)
+                    const elementPosition = targetElement.getBoundingClientRect().top;
+                    const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+                    window.scrollTo({
+                        top: offsetPosition,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+
+        // Admin Modal
         const adminModal = document.getElementById('adminModal');
         const adminBtn = document.getElementById('adminBtn');
-        const closeBtn = document.querySelector('.close');
+        const closeModal = document.querySelector('.close');
 
         adminBtn.addEventListener('click', function(e) {
             e.preventDefault();
             adminModal.classList.add('show');
         });
 
-        closeBtn.addEventListener('click', function() {
+        closeModal.addEventListener('click', function() {
             adminModal.classList.remove('show');
         });
 
@@ -716,6 +972,7 @@
 
         document.getElementById('adminLoginForm').addEventListener('submit', function(e) {
             e.preventDefault();
+            // Basit doğrulama (gerçek uygulamada backend'de yapılmalı)
             const username = this.querySelector('input[type="text"]').value;
             const password = this.querySelector('input[type="password"]').value;
 
@@ -726,45 +983,7 @@
             }
         });
 
-        // Hamburger Menu
-        const hamburger = document.getElementById('hamburger');
-        const navLinks = document.querySelector('.nav-links');
-
-        hamburger.addEventListener('click', function() {
-            navLinks.classList.toggle('active');
-            this.classList.toggle('active');
-        });
-
-        // Nav linklerine tıklandığında menüyü kapat
-        document.querySelectorAll('.nav-links a').forEach(link => {
-            link.addEventListener('click', function() {
-                navLinks.classList.remove('active');
-                hamburger.classList.remove('active');
-            });
-        });
-
-        // Smooth Scrolling
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function(e) {
-                const href = this.getAttribute('href');
-                if (href === '#') return;
-
-                e.preventDefault();
-                const target = document.querySelector(href);
-                if (target) {
-                    const headerOffset = 107;
-                    const elementPosition = target.getBoundingClientRect().top;
-                    const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-
-                    window.scrollTo({
-                        top: offsetPosition,
-                        behavior: 'smooth'
-                    });
-                }
-            });
-        });
-
-        // Scroll Animations
+        // Scroll animations
         const observerOptions = {
             threshold: 0.1,
             rootMargin: '0px 0px -50px 0px'
@@ -779,6 +998,7 @@
             });
         }, observerOptions);
 
+        // Animate elements on scroll
         document.querySelectorAll('.feature-card, .stat-card, .process-step, .pricing-card, .faq-item').forEach(el => {
             el.style.opacity = '0';
             el.style.transform = 'translateY(30px)';
@@ -786,28 +1006,90 @@
             observer.observe(el);
         });
 
-        // FAQ Accordion
-        document.querySelectorAll('.faq-question').forEach(button => {
-            button.addEventListener('click', function() {
-                const faqItem = this.parentElement;
-                faqItem.classList.toggle('active');
+        // Customer Login Modal
+        const customerLoginModal = document.getElementById('customerLoginModal');
+        const customerLoginBtnNav = document.getElementById('customerLoginBtn');
+        const customerLoginClose = document.getElementById('customerLoginClose');
+        const customerLoginForm = document.getElementById('customerLoginForm');
+        const customerErrorMsg = document.getElementById('customerErrorMessage');
+        const customerSuccessMsg = document.getElementById('customerSuccessMessage');
+
+        // Open modal
+        if (customerLoginBtnNav) {
+            customerLoginBtnNav.addEventListener('click', function(e) {
+                e.preventDefault();
+                customerLoginModal.style.display = 'flex';
+                document.getElementById('customerEmail').focus();
             });
+        }
+
+        // Close modal
+        customerLoginClose.addEventListener('click', function() {
+            customerLoginModal.style.display = 'none';
+            customerErrorMsg.style.display = 'none';
+            customerSuccessMsg.style.display = 'none';
         });
 
-        // Contact Form
-        document.getElementById('contactForm').addEventListener('submit', function(e) {
+        // Close on overlay click
+        window.addEventListener('click', function(e) {
+            if (e.target === customerLoginModal) {
+                customerLoginModal.style.display = 'none';
+                customerErrorMsg.style.display = 'none';
+                customerSuccessMsg.style.display = 'none';
+            }
+        });
+
+        // Login form submission
+        customerLoginForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            alert('Mesajınız alındı! En kısa sürede size dönüş yapacağız.');
-            this.reset();
-        });
 
-        // Demo Account Display
-        document.addEventListener('DOMContentLoaded', function() {
-            const demoEmailEl = document.getElementById('demoEmail');
-            const demoPasswordEl = document.getElementById('demoPassword');
+            const email = document.getElementById('customerEmail').value;
+            const password = document.getElementById('customerPassword').value;
+            const rememberMe = document.getElementById('customerRemember').checked;
 
-            if (demoEmailEl) demoEmailEl.textContent = 'ali.yilmaz0@email.com';
-            if (demoPasswordEl) demoPasswordEl.textContent = 'dask2024';
+            customerErrorMsg.style.display = 'none';
+            customerSuccessMsg.style.display = 'none';
+
+            // Sunucuya API çağrısı yap
+            fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        password: password
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Store token
+                        localStorage.setItem('token', data.token);
+                        localStorage.setItem('customer_id', data.customer.customer_id);
+                        localStorage.setItem('customer_email', email);
+                        localStorage.setItem('customer_name', data.customer.full_name);
+
+                        if (rememberMe) {
+                            localStorage.setItem('rememberMe', 'true');
+                        }
+
+                        customerSuccessMsg.textContent = '✓ Giriş başarılı! Dashboard\'a yönlendiriliyorsunuz...';
+                        customerSuccessMsg.style.display = 'block';
+
+                        setTimeout(() => {
+                            window.location.href = '/dashboard';
+                        }, 1500);
+                    } else {
+                        customerErrorMsg.textContent = '✗ ' + (data.error || 'Giriş başarısız. Lütfen tekrar deneyiniz.');
+                        customerErrorMsg.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    customerErrorMsg.textContent = '✗ Bir hata oluştu. Lütfen tekrar deneyiniz.';
+                    customerErrorMsg.style.display = 'block';
+                });
         });
     </script>
 </body>

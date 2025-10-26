@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="tr">
 
 <head>
@@ -135,9 +135,6 @@
                 <a href="#integrations" class="nav-link group flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-primary">
                     <i class="fas fa-plug mr-3"></i> Entegrasyonlar
                 </a>
-                <a href="#demo" class="nav-link group flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-primary">
-                    <i class="fas fa-flask mr-3"></i> Canlı Demo
-                </a>
                 <a href="#audit" class="nav-link group flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-primary">
                     <i class="fas fa-history mr-3"></i> Denetim Kayıtları
                 </a>
@@ -147,7 +144,7 @@
             </nav>
 
             <div class="absolute bottom-0 w-full p-4 border-t border-gray-700">
-                <button class="w-full flex items-center justify-center px-3 py-2 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 transition-colors" onclick="window.location.href='/'">
+                <button class="w-full flex items-center justify-center px-3 py-2 text-sm font-medium rounded-md bg-red-600 hover:bg-red-700 transition-colors">
                     <i class="fas fa-sign-out-alt mr-2"></i> Çıkış Yap
                 </button>
             </div>
@@ -944,93 +941,6 @@
                     </div>
                 </div>
 
-                <!-- Demo Section -->
-                <div id="demo-section" class="section hidden fade-in">
-                    <div class="bg-white shadow rounded-lg p-6">
-                        <h3 class="text-xl font-semibold text-gray-900 mb-6">Canlı Demo</h3>
-                        <p class="text-gray-600 mb-8">Parametrik sigorta sistemimizin nasıl çalıştığını 4 adımda test edin.</p>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                            <!-- Panel 1: Adres Girişi -->
-                            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-lg border border-blue-200">
-                                <h4 class="text-lg font-semibold text-gray-900 mb-2 flex items-center">
-                                    <span class="flex items-center justify-center w-8 h-8 bg-primary text-white rounded-full text-sm font-bold mr-2">1</span>
-                                    Adresinizi Seçin
-                                </h4>
-                                <p class="text-sm text-gray-600 mb-4">Prim hesaplaması için konumunuzu belirtin.</p>
-                                <form class="space-y-3" id="demoAddressForm">
-                                    <select class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-medium bg-white" id="demoIlSelect" required>
-                                        <option value="">İl Seçiniz</option>
-                                    </select>
-                                    <select class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-medium bg-white" id="demoIlceSelect" required disabled>
-                                        <option value="">İlçe Seçiniz</option>
-                                    </select>
-                                    <select class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-medium bg-white" id="demoMahalleSelect" required disabled>
-                                        <option value="">Mahalle Seçiniz</option>
-                                    </select>
-                                </form>
-                            </div>
-
-                            <!-- Panel 2: Teminat Seçimi -->
-                            <div class="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-lg border border-green-200">
-                                <h4 class="text-lg font-semibold text-gray-900 mb-2 flex items-center">
-                                    <span class="flex items-center justify-center w-8 h-8 bg-green-600 text-white rounded-full text-sm font-bold mr-2">2</span>
-                                    Paketinizi Seçin
-                                </h4>
-                                <p class="text-sm text-gray-600 mb-4">İhtiyacınıza uygun teminat seçin.</p>
-                                <div class="space-y-2" id="demoTierSelection">
-                                    <div class="demo-tier-card p-3 border-2 border-gray-200 rounded cursor-pointer hover:border-green-600 transition-colors" data-tier="1" data-amount="250000">
-                                        <p class="font-medium text-gray-900">Temel Paket</p>
-                                        <p class="text-sm text-green-600 font-bold">250,000 TL</p>
-                                    </div>
-                                    <div class="demo-tier-card p-3 border-2 border-gray-200 rounded cursor-pointer hover:border-green-600 transition-colors" data-tier="2" data-amount="500000">
-                                        <p class="font-medium text-gray-900">Standart Paket</p>
-                                        <p class="text-sm text-green-600 font-bold">500,000 TL</p>
-                                    </div>
-                                    <div class="demo-tier-card p-3 border-2 border-gray-200 rounded cursor-pointer hover:border-green-600 transition-colors" data-tier="3" data-amount="1000000">
-                                        <p class="font-medium text-gray-900">Premium Paket</p>
-                                        <p class="text-sm text-green-600 font-bold">1,000,000 TL</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Panel 3: Prim Hesaplama -->
-                            <div class="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-lg border border-purple-200">
-                                <h4 class="text-lg font-semibold text-gray-900 mb-2 flex items-center">
-                                    <span class="flex items-center justify-center w-8 h-8 bg-purple-600 text-white rounded-full text-sm font-bold mr-2">3</span>
-                                    Teklifini Görün
-                                </h4>
-                                <p class="text-sm text-gray-600 mb-4">Konum ve paketinize özel fiyat.</p>
-                                <button class="w-full bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" id="demoPrimBtn" disabled>
-                                    Prim Hesapla
-                                </button>
-                                <div id="demoPrimResult" class="mt-4 p-3 bg-green-100 text-green-800 rounded hidden">
-                                    <p class="text-sm font-medium">Yıllık Prim:</p>
-                                    <p class="text-xl font-bold" id="demoPrimAmount">-</p>
-                                    <p class="text-xs text-green-700 mt-1">Adres: <span id="demoPrimAddress">-</span></p>
-                                </div>
-                            </div>
-
-                            <!-- Panel 4: Deprem Simülasyonu -->
-                            <div class="bg-gradient-to-br from-orange-50 to-red-50 p-6 rounded-lg border border-orange-200">
-                                <h4 class="text-lg font-semibold text-gray-900 mb-2 flex items-center">
-                                    <span class="flex items-center justify-center w-8 h-8 bg-orange-600 text-white rounded-full text-sm font-bold mr-2">4</span>
-                                    Ödeme Simülasyonu
-                                </h4>
-                                <p class="text-sm text-gray-600 mb-4">Otomatik tetikleme test edin.</p>
-                                <button class="w-full bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" id="demoSimulateBtn" disabled>
-                                    Simülasyonu Başlat
-                                </button>
-                                <div id="demoSimulationResult" class="mt-4 p-3 bg-green-100 text-green-800 rounded hidden">
-                                    <p class="text-sm font-bold mb-2">✅ Ödeme Tetiklendi!</p>
-                                    <p class="text-sm mb-2">Tutarı: <strong id="demoPayoutAmount">-</strong></p>
-                                    <p class="text-xs text-green-700">İşlem süresi: <span id="demoPaymentTime">-</span> saniye</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- System Settings Section -->
                 <div id="settings-section" class="section hidden fade-in">
                     <div class="grid grid-cols-1 gap-6">
@@ -1186,7 +1096,7 @@
             adres: 'İstanbul/Kadıköy',
             teminat: '75,000 TL',
             prim: 680,
-            baslangıç: '2025-01-15',
+            baslangic: '2025-01-15',
             durum: 'Aktif'
         }, {
             no: 'DP25002',
@@ -1466,7 +1376,7 @@
                 data: {
                     labels: ['Yüksek Risk', 'Orta Risk', 'Düşük Risk'],
                     datasets: [{
-                        data: [315,582,350],
+                        data: [315, 582, 350],
                         backgroundColor: ['#dc2626', '#f59e0b', '#10b981'],
                     }]
                 },
@@ -1792,7 +1702,7 @@
             // Sonraki buton durumu
             nextBtn.disabled = !apiResponse.has_next;
 
-            // Sayfa numarlarını oluştur (max 5 sayfa göster)
+            // Sayfa numaralarını oluştur (max 5 sayfa göster)
             pageNumbersDiv.innerHTML = '';
             let startPage = Math.max(1, page - 2);
             let endPage = Math.min(totalPages, startPage + 4);
@@ -1947,7 +1857,7 @@
             // Sonraki buton durumu
             nextBtn.disabled = !apiResponse.has_next;
 
-            // Sayfa numarlarını oluştur (max 5 sayfa göster)
+            // Sayfa numaralarını oluştur (max 5 sayfa göster)
             pageNumbersDiv.innerHTML = '';
             let startPage = Math.max(1, page - 2);
             let endPage = Math.min(totalPages, startPage + 4);
@@ -2394,230 +2304,6 @@
                 btn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Modeli Yeniden Eğit';
             }
         }
-
-        // --- DEMO SECTION LOGIC ---
-
-        // Türkiye il-ilçe-mahalle verileri
-        const demoLocationData = {
-            "İstanbul": {
-                risk: 1.8,
-                ilceler: {
-                    "Kadıköy": ["Fenerbahçe", "Göztepe", "Moda", "Acıbadem"],
-                    "Beşiktaş": ["Etiler", "Levent", "Ortaköy", "Bebek"],
-                    "Fatih": ["Sultanahmet", "Aksaray", "Çapa", "Kocamustafapaşa"]
-                }
-            },
-            "İzmir": {
-                risk: 1.5,
-                ilceler: {
-                    "Bornova": ["Evka-3", "Erzene", "Doğanlar", "Işıkkent"],
-                    "Çeşme": ["Alaçatı", "Ilıca", "Dalyan", "Germiyan"],
-                    "Karşıyaka": ["Bostanlı", "Mavişehir", "Yamanlar", "Bostanlı"]
-                }
-            },
-            "Ankara": {
-                risk: 1.0,
-                ilceler: {
-                    "Çankaya": ["Kızılay", "Bahçelievler", "Ayrancı", "Çayyolu"],
-                    "Keçiören": ["Esertepe", "Bağlarbaşı", "Aktepe", "Ovacık"],
-                    "Mamak": ["Ege", "Durali Alıç", "Şafak", "Tuzluçayır"]
-                }
-            },
-            "Bursa": {
-                risk: 1.3,
-                ilceler: {
-                    "Nilüfer": ["Görükle", "Ertuğrul", "Balat", "Özlüce"],
-                    "Osmangazi": ["Demirtaş", "Hamitler", "Soğanlı", "Yunuseli"],
-                    "Yıldırım": ["Millet", "Yıldırım", "Güneştepe", "Davutdede"]
-                }
-            },
-            "Tokat": {
-                risk: 1.2,
-                ilceler: {
-                    "Merkez": ["Behzat", "Gülbahar", "Kemaliye", "Meydan"],
-                    "Erbaa": ["Akpınar", "Çalköy", "Karacaören", "Yavu"],
-                    "Turhal": ["Akçaören", "Aydınlık", "Büyükkızılcık", "Sofular"]
-                }
-            }
-        };
-
-        let demoSelectedData = {
-            il: null,
-            ilce: null,
-            mahalle: null,
-            tier: null,
-            amount: null
-        };
-
-        // İl dropdown'unu doldur
-        const demoIlSelect = document.getElementById('demoIlSelect');
-        const demoIlceSelect = document.getElementById('demoIlceSelect');
-        const demoMahalleSelect = document.getElementById('demoMahalleSelect');
-
-        Object.keys(demoLocationData).forEach(il => {
-            const option = document.createElement('option');
-            option.value = il;
-            option.textContent = il;
-            demoIlSelect.appendChild(option);
-        });
-
-        // İl seçildiğinde ilçeleri göster
-        demoIlSelect.addEventListener('change', function() {
-            demoSelectedData.il = this.value;
-            demoIlceSelect.innerHTML = '<option value="">İlçe Seçiniz</option>';
-            demoMahalleSelect.innerHTML = '<option value="">Mahalle Seçiniz</option>';
-            demoMahalleSelect.disabled = true;
-
-            if (this.value) {
-                demoIlceSelect.disabled = false;
-                const ilceler = demoLocationData[this.value].ilceler;
-                Object.keys(ilceler).forEach(ilce => {
-                    const option = document.createElement('option');
-                    option.value = ilce;
-                    option.textContent = ilce;
-                    demoIlceSelect.appendChild(option);
-                });
-            } else {
-                demoIlceSelect.disabled = true;
-            }
-            checkDemoCalculateButton();
-        });
-
-        // İlçe seçildiğinde mahalleleri göster
-        demoIlceSelect.addEventListener('change', function() {
-            demoSelectedData.ilce = this.value;
-            demoMahalleSelect.innerHTML = '<option value="">Mahalle Seçiniz</option>';
-
-            if (this.value && demoSelectedData.il) {
-                demoMahalleSelect.disabled = false;
-                const mahalleler = demoLocationData[demoSelectedData.il].ilceler[this.value];
-                mahalleler.forEach(mahalle => {
-                    const option = document.createElement('option');
-                    option.value = mahalle;
-                    option.textContent = mahalle;
-                    demoMahalleSelect.appendChild(option);
-                });
-            } else {
-                demoMahalleSelect.disabled = true;
-            }
-            checkDemoCalculateButton();
-        });
-
-        // Mahalle seçildiğinde
-        demoMahalleSelect.addEventListener('change', function() {
-            demoSelectedData.mahalle = this.value;
-            checkDemoCalculateButton();
-        });
-
-        // Tier seçimi
-        const demoTierCards = document.querySelectorAll('.demo-tier-card');
-        demoTierCards.forEach(card => {
-            card.addEventListener('click', function() {
-                demoTierCards.forEach(c => c.classList.remove('border-primary', 'border-3', 'bg-green-50'));
-                this.classList.add('border-primary', 'border-3', 'bg-green-50');
-                demoSelectedData.tier = this.dataset.tier;
-                demoSelectedData.amount = this.dataset.amount;
-                checkDemoCalculateButton();
-            });
-        });
-
-        // Hesapla butonunu kontrol et
-        function checkDemoCalculateButton() {
-            const btn = document.getElementById('demoPrimBtn');
-            if (demoSelectedData.il && demoSelectedData.ilce && demoSelectedData.mahalle && demoSelectedData.tier) {
-                btn.disabled = false;
-            } else {
-                btn.disabled = true;
-            }
-        }
-
-        // Prim hesapla
-        document.getElementById('demoPrimBtn').addEventListener('click', async function() {
-            this.disabled = true;
-            this.textContent = 'Hesaplanıyor...';
-
-            try {
-                let packageName = 'temel';
-                if (demoSelectedData.tier === '2') packageName = 'standard';
-                else if (demoSelectedData.tier === '3') packageName = 'premium';
-
-                const response = await fetch('/api/calculate-premium', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        il: demoSelectedData.il,
-                        ilce: demoSelectedData.ilce,
-                        mahalle: demoSelectedData.mahalle,
-                        package: packageName
-                    })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    document.getElementById('demoPrimAmount').textContent =
-                        result.data.premium.toLocaleString('tr-TR') + ' TL';
-                    document.getElementById('demoPrimAddress').textContent = result.data.location;
-                    document.getElementById('demoPrimResult').classList.remove('hidden');
-                    document.getElementById('demoSimulateBtn').disabled = false;
-                } else {
-                    alert('Prim hesaplama hatası: ' + result.message);
-                }
-            } catch (error) {
-                console.error('API hatası:', error);
-                alert('Sunucu ile bağlantı kurulamadı');
-            } finally {
-                this.disabled = false;
-                this.textContent = 'Prim Hesapla';
-            }
-        });
-
-        // Deprem simülasyonu
-        document.getElementById('demoSimulateBtn').addEventListener('click', async function() {
-            this.disabled = true;
-            this.textContent = 'Simülasyon Çalışıyor...';
-
-            const startTime = Date.now();
-
-            try {
-                const response = await fetch('/api/simulate-trigger', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        coverage: parseInt(demoSelectedData.amount),
-                        location: `${demoSelectedData.mahalle}, ${demoSelectedData.ilce}, ${demoSelectedData.il}`
-                    })
-                });
-
-                const result = await response.json();
-
-                if (result.success && result.triggered) {
-                    const endTime = Date.now();
-                    const realProcessingTime = ((endTime - startTime) / 1000).toFixed(2);
-
-                    document.getElementById('demoPayoutAmount').textContent =
-                        result.data.payout_amount.toLocaleString('tr-TR') + ' TL';
-                    document.getElementById('demoPaymentTime').textContent = realProcessingTime;
-                    document.getElementById('demoSimulationResult').classList.remove('hidden');
-
-                    this.textContent = 'Tekrar Simüle Et';
-                } else {
-                    alert('Simülasyon hatası: ' + (result.message || 'Bilinmeyen hata'));
-                }
-            } catch (error) {
-                console.error('API hatası:', error);
-                alert('Sunucu ile bağlantı kurulamadı');
-            } finally {
-                this.disabled = false;
-                if (this.textContent === 'Simülasyon Çalışıyor...') {
-                    this.textContent = 'Simülasyonu Başlat';
-                }
-            }
-        });
 
         // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', () => {

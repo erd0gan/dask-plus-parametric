@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="tr">
 
 <head>
@@ -71,7 +71,7 @@
                 </a>
             </nav>
             <div class="sidebar-footer">
-                <button class="logout-btn" onclick="window.location.href='/'">
+                <button class="logout-btn" onclick="window.location.href='index.html'">
                     <i class="fas fa-sign-out-alt"></i>
                     <span>Çıkış Yap</span>
                 </button>
