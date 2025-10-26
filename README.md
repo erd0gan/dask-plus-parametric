@@ -42,7 +42,7 @@
 
 ```powershell
 # 1. Repository'yi klonlayın
-git clone https://github.com/erd0gan/dask-plus-parametrik.git
+git clone https://github.com/erd0gan/dask-plus-parametric.git
 cd dask-plus-parametrik
 
 # 2. Virtual environment oluşturun
