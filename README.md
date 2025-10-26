@@ -330,8 +330,8 @@ Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICE
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/erd0gan/dask-plus-parametrik.git
-cd dask-plus-parametrik
+git clone https://github.com/erd0gan/dask-plus-parametric.git
+cd dask-plus-parametric
 
 # 2. Create virtual environment
 python -m venv venv
