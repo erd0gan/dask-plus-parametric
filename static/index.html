@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DASK+ Parametrik | Yeni Nesil Deprem Güvencesi</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='ico.ico') }}">
     <link rel="stylesheet" href="/static/styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -14,8 +15,7 @@
     <div class="topbar">
         <div class="topbar-content">
             <div class="topbar-left">
-                <span><i class="fa-solid fa-phone"></i> ALO DASK+ 444 3275</span>
-                <span><i class="fa-solid fa-envelope"></i> info@daskplus.com.tr</span>
+                <span><i class="fa-solid fa-envelope"></i> daskplus@gmail.com</span>
             </div>
             <div class="topbar-right">
                 <a href="#" class="topbar-link">Poliçe Sorgula</a>
@@ -101,9 +101,9 @@
             <div class="section-content">
                 <div class="hero-content">
                     <h1 class="hero-title">DASK+ Parametrik</h1>
-                    <p class="hero-subtitle">Deprem Sonrası İlk 48 Saat İçin Nakit Güvenceniz</p>
+                    <p class="hero-subtitle">Deprem Sonrası İlk 72 Saat İçin Nakit Güvenceniz</p>
                     <p class="hero-description">
-                        Eksper beklemeden, evrak olmadan, sadece Kandilli Rasathanesi verileriyle tetiklenen, önceden belirlenmiş nakit ödemeniz 48 saat içinde hesabınızda. DASK'ın boşluklarını dolduran yeni nesil güvence.
+                        Eksper beklemeden, evrak olmadan, sadece Kandilli Rasathanesi verileriyle tetiklenen, önceden belirlenmiş nakit ödemeniz 72 saat içinde hesabınızda. DASK'ın boşluklarını dolduran yeni nesil güvence.
                     </p>
                     <div class="hero-buttons">
                         <a href="#demo" class="cta-button primary">Fiyat Teklifi Al</a>
@@ -134,12 +134,12 @@
             <div class="section-content">
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-number">11.5M+</div>
+                        <div class="stat-number">12M+</div>
                         <div class="stat-label">Hedef Kitle</div>
                         <div class="stat-desc">Mevcut DASK Poliçe Sahibi</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-number">48 Saat</div>
+                        <div class="stat-number">72 Saat</div>
                         <div class="stat-label">Ödeme Süresi</div>
                         <div class="stat-desc">Deprem Sonrası Hızlı Destek</div>
                     </div>
@@ -224,13 +224,13 @@
                 <div class="comparison-table">
                     <div class="comparison-header">
                         <div class="comparison-col">Özellik</div>
-                        <div class="comparison-col highlight">DASK+ Parametrik</div>
+                        <div class="comparison-col">DASK+ Parametrik</div>
                         <div class="comparison-col">Geleneksel DASK</div>
                     </div>
 
                     <div class="comparison-row">
                         <div class="comparison-col"><strong>Ödeme Süresi</strong></div>
-                        <div class="comparison-col highlight"><i class="fa-solid fa-check"></i> 48 Saat</div>
+                        <div class="comparison-col highlight"><i class="fa-solid fa-check"></i> 72 Saat</div>
                         <div class="comparison-col"><i class="fa-solid fa-xmark"></i> 30+ Gün (Genelde Aylar)</div>
                     </div>
 
@@ -299,7 +299,7 @@
                         <div class="process-number">4</div>
                         <div class="process-icon"><i class="fa-solid fa-money-bill-transfer"></i></div>
                         <h3 class="process-title">Anında Ödeme</h3>
-                        <p class="process-desc">48 saat içinde belirlenen tutar doğrudan banka hesabınıza yatırılır.</p>
+                        <p class="process-desc">72 saat içinde belirlenen tutar doğrudan banka hesabınıza yatırılır.</p>
                     </div>
                 </div>
 
@@ -363,7 +363,7 @@
                             <li><i class="fa-solid fa-check"></i> İlk ay geçici konaklama</li>
                             <li><i class="fa-solid fa-check"></i> DASK muafiyeti karşılama</li>
                             <li><i class="fa-solid fa-check"></i> Acil enkaz temizliği</li>
-                            <li><i class="fa-solid fa-check"></i> 48 saat içinde ödeme</li>
+                            <li><i class="fa-solid fa-check"></i> 72 saat içinde ödeme</li>
                             <li><i class="fa-solid fa-check"></i> Sıfır evrak işlemi</li>
                         </ul>
 
@@ -508,7 +508,7 @@
                         <button class="demo-button" id="simulateBtn" disabled>Deprem Simülasyonu Başlat</button>
                         <div class="result-box" id="simulationResult" style="display: none;">
                             <strong>✅ Ödeme Tetiklendi!</strong>
-                            <p>PGV eşiği aşıldı. <strong id="payoutAmount"></strong> tutarındaki ödemeniz 48 saat içinde hesabınızda olacak.</p>
+                            <p>PGV eşiği aşıldı. <strong id="payoutAmount"></strong> tutarındaki ödemeniz 72 saat içinde hesabınızda olacak.</p>
                             <p style="font-size: 0.8em; opacity: 0.7; margin-top: 5px;">İşlem süresi: <span id="paymentTime"></span> saniye</p>
                         </div>
                     </div>
@@ -529,7 +529,7 @@
                             <i class="fa-solid fa-plus"></i>
                         </button>
                         <div class="faq-answer">
-                            <p>Hayır. DASK+ Parametrik, DASK'ı tamamlayan bir üründür. DASK binanızın yapısal hasarını karşılarken, DASK+ deprem sonrası ilk 48 saatteki acil nakit ihtiyaçlarınız için anında likidite sağlar. Her iki ürüne de sahip olmanızı
+                            <p>Hayır. DASK+ Parametrik, DASK'ı tamamlayan bir üründür. DASK binanızın yapısal hasarını karşılarken, DASK+ deprem sonrası ilk 72 saatteki acil nakit ihtiyaçlarınız için anında likidite sağlar. Her iki ürüne de sahip olmanızı
                                 öneririz.
                             </p>
                         </div>
@@ -563,7 +563,7 @@
                             <i class="fa-solid fa-plus"></i>
                         </button>
                         <div class="faq-answer">
-                            <p>Deprem sonrası PGV eşiği aşıldığında size SMS/e-posta ile bildirim gönderilir. "EVET" yanıtınızın ardından 24-48 saat içinde ödeme doğrudan banka hesabınıza yatırılır. Hiçbir evrak, eksper ziyareti veya hasar tespiti gerekmez.</p>
+                            <p>Deprem sonrası PGV eşiği aşıldığında size SMS/e-posta ile bildirim gönderilir. "EVET" yanıtınızın ardından 72 saat içinde ödeme doğrudan banka hesabınıza yatırılır. Hiçbir evrak, eksper ziyareti veya hasar tespiti gerekmez.</p>
                         </div>
                     </div>
 
@@ -621,13 +621,8 @@
                         <h3 style="font-size: 1.5rem; margin-bottom: 1.5rem;">Diğer İletişim Kanalları</h3>
                         <div style="display: flex; justify-content: center; gap: 3rem; flex-wrap: wrap;">
                             <div>
-                                <i class="fa-solid fa-phone" style="font-size: 2rem; color: var(--primary-blue-light); margin-bottom: 0.5rem;"></i>
-                                <p style="font-weight: 600;">ALO DASK+ 444 3275</p>
-                                <p style="color: var(--text-gray); font-size: 0.9rem;">7/24 Müşteri Hizmetleri</p>
-                            </div>
-                            <div>
                                 <i class="fa-solid fa-envelope" style="font-size: 2rem; color: var(--primary-blue-light); margin-bottom: 0.5rem;"></i>
-                                <p style="font-weight: 600;">info@daskplus.com.tr</p>
+                                <p style="font-weight: 600;">daskplus@gmail.com</p>
                                 <p style="color: var(--text-gray); font-size: 0.9rem;">E-posta Desteği</p>
                             </div>
                             <div>
@@ -648,7 +643,7 @@
             <div class="footer-section">
                 <h3>DASK+ Parametrik</h3>
                 <p style="color: rgba(255, 255, 255, 0.8); margin-top: 1rem; line-height: 1.6;">
-                    Deprem sonrası ilk 48 saat için nakit güvenceniz. Teknoloji ve şeffaflık ile yeni nesil sigorta deneyimi.
+                    Deprem sonrası ilk 72 saat için nakit güvenceniz. Teknoloji ve şeffaflık ile yeni nesil sigorta deneyimi.
                 </p>
             </div>
             <div class="footer-section">
@@ -701,7 +696,7 @@
     <script>
         // Demo hesap bilgisini veri setinden al
         const demoAccountData = {
-            email: 'ali.yılmaz0@email.com',
+            email: 'ali.yilmaz0@email.com',
             password: 'dask2024'
         };
 

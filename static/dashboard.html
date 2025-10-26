@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Müşteri Paneli | DASK+ Parametrik</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='ico.ico') }}">
     <link rel="stylesheet" href="/static/styles.css">
     <link rel="stylesheet" href="/static/dashboard.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -36,10 +37,7 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <h2>Menü</h2>
-                <button class="sidebar-close" id="sidebarClose">
-                    <i class="fas fa-times"></i>
-                </button>
+                <img src="/static/logo.png" alt="DASK+ Logo" class="sidebar-logo">
             </div>
 
             <nav class="sidebar-nav">
@@ -72,13 +70,11 @@
                     <span>Ayarlar</span>
                 </a>
             </nav>
-
             <div class="sidebar-footer">
-                <div class="support-box">
-                    <i class="fas fa-headset"></i>
-                    <p>Yardıma mı ihtiyacın var?</p>
-                    <a href="#" class="support-btn">Chat Başlat</a>
-                </div>
+                <button class="logout-btn" onclick="window.location.href='index.html'">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Çıkış Yap</span>
+                </button>
             </div>
         </aside>
 
