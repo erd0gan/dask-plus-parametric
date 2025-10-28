@@ -2350,3 +2350,198 @@ header {
     border-left: 4px solid #c00;
     margin-bottom: 1.5rem;
 }
+
+/* ============================================
+   YENİ POLİÇE BİLDİRİM MODAL STİLLERİ
+   ============================================ */
+
+.notification-modal .modal-overlay {
+    backdrop-filter: blur(5px);
+}
+
+.notification-content {
+    max-width: 450px !important;
+    width: 90%;
+    animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    border: none;
+    border-top: 5px solid var(--accent-green);
+    overflow: hidden;
+}
+
+@keyframes popIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.8) translateY(20px);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.notification-modal .modal-header {
+    display: none;
+}
+
+.notification-modal .modal-body {
+    padding: 0;
+    text-align: center;
+}
+
+.notification-icon {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, var(--accent-green), #10b981);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 2rem auto 1rem;
+    font-size: 2.5rem;
+    color: white;
+    animation: iconBounce 0.6s ease-out;
+}
+
+@keyframes iconBounce {
+    0% {
+        transform: scale(0);
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.notification-content h2 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text-dark);
+    margin: 0 0 0.5rem;
+    font-family: inherit;
+}
+
+.notification-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--primary-blue-dark);
+    margin: 0 0 1rem;
+    padding: 0 1.5rem;
+}
+
+.notification-message {
+    color: var(--text-gray);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin: 0 0 1.5rem;
+    padding: 0 1.5rem;
+}
+
+.notification-contact {
+    background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+    padding: 1.5rem;
+    border-radius: 12px;
+    margin: 0 1.5rem 1.5rem;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.contact-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    text-align: left;
+}
+
+    .contact-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .contact-item i {
+        font-size: 1.5rem;
+        color: var(--primary-blue);
+        min-width: 30px;
+    }
+
+.contact-label {
+    font-size: 0.8rem;
+    color: var(--text-gray);
+    margin: 0 0 0.25rem;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.contact-item a {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--primary-blue-dark);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+    margin: 0;
+}
+
+    .contact-item a:hover {
+        color: var(--primary-blue);
+        text-decoration: underline;
+    }
+
+.notification-actions {
+    display: flex;
+    gap: 1rem;
+    padding: 0 1.5rem 2rem;
+    flex-wrap: wrap;
+}
+
+    .notification-actions .btn-secondary,
+    .notification-actions .btn-primary {
+        flex: 1;
+        min-width: 120px;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all var(--transition-normal);
+        font-size: 0.95rem;
+    }
+
+    .notification-actions .btn-secondary {
+        background: white;
+        color: var(--text-gray);
+        border: 2px solid #e2e8f0;
+    }
+
+        .notification-actions .btn-secondary:hover {
+            background: #f8fafc;
+            border-color: var(--text-gray);
+        }
+
+    .notification-actions .btn-primary {
+        background: linear-gradient(135deg, var(--accent-green), #10b981);
+        color: white;
+        border: none;
+    }
+
+        .notification-actions .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+        }
+
+@media (max-width: 480px) {
+    .notification-content {
+        max-width: 95% !important;
+    }
+
+    .notification-actions {
+        flex-direction: column;
+    }
+
+        .notification-actions .btn-secondary,
+        .notification-actions .btn-primary {
+            flex: none;
+            width: 100%;
+        }
+}

@@ -18,9 +18,8 @@
                 <span><i class="fa-solid fa-envelope"></i> daskplus@gmail.com</span>
             </div>
             <div class="topbar-right">
-                <a href="#" class="topbar-link">Poliçe Sorgula</a>
-                <a href="#" class="topbar-link">Hasar Bildir</a>
-                <a href="#" class="topbar-link">Sıkça Sorulan Sorular</a>
+                <a href="#contact" class="topbar-link">Poliçe Sorgula</a>
+                <a href="#" class="topbar-link" id="hasar-bildir">Hasar Bildir</a>
             </div>
         </div>
     </div>
@@ -620,6 +619,7 @@
         // Müşteri Giriş Modalı
         const customerLoginModal = document.getElementById('customerLoginModal');
         const customerLoginBtn = document.getElementById('customerLoginBtn');
+        const customerLoginBtn1 = document.getElementById('hasar-bildir');
         const customerLoginClose = document.getElementById('customerLoginClose');
         const customerLoginForm = document.getElementById('customerLoginForm');
         const customerErrorMsg = document.getElementById('customerErrorMessage');
@@ -631,7 +631,11 @@
             customerLoginModal.style.display = 'flex';
             document.getElementById('customerEmail').focus();
         });
-
+        customerLoginBtn1.addEventListener('click', function (e) {
+            e.preventDefault();
+            customerLoginModal.style.display = 'flex';
+            document.getElementById('customerEmail').focus();
+        });
         // Modalı kapat
         customerLoginClose.addEventListener('click', function() {
             customerLoginModal.style.display = 'none';
@@ -791,6 +795,14 @@
             button.addEventListener('click', function() {
                 const faqItem = this.parentElement;
                 faqItem.classList.toggle('active');
+            });
+        });
+
+        // Technical Details Accordion
+        document.querySelectorAll('.accordion-button').forEach(button => {
+            button.addEventListener('click', function() {
+                const accordionItem = this.parentElement;
+                accordionItem.classList.toggle('active');
             });
         });
 

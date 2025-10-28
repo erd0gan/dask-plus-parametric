@@ -97,12 +97,7 @@ if (raiseClaimBtn) {
     });
 }
 
-const newPolicyBtn = document.getElementById('newPolicyBtn');
-if (newPolicyBtn) {
-    newPolicyBtn.addEventListener('click', () => {
-        window.location.href = '/#demo';
-    });
-}
+
 
 // Referral Functions
 function copyReferralCode() {
@@ -1412,21 +1407,17 @@ function closeLoginModal() {
 
 // ===== POLİÇE DETAYLARI MODAL FONKSİYONLARI =====
 
-// Modal'ı aç ve poliçe detaylarını yükle
+// Modal'ı aç ve poliçe detaylarını yükle (GÜNCELLENMIŞ)
 async function openPolicyDetailsModal(buildingId) {
     const modal = document.getElementById('policyDetailsModal');
     const loadingEl = document.getElementById('modalPolicyLoading');
     const contentEl = document.getElementById('modalPolicyContent');
     const errorEl = document.getElementById('modalPolicyError');
     
-    console.log('🔍 Modal açılıyor - Building ID:', buildingId);
-    console.log('📦 LocalStorage içeriği:', {
-        customerId: localStorage.getItem('customerId'),
-        customer_id: localStorage.getItem('customer_id'),
-        authToken: localStorage.getItem('authToken'),
-        token: localStorage.getItem('token'),
-        auth_token: localStorage.getItem('auth_token')
-    });
+    // buildingId yoksa localStorage'dan customer_id kullan
+    const customerId = buildingId || (localStorage.getItem('customerId') || localStorage.getItem('customer_id'));
+    
+    console.log('🔍 Modal açılıyor - Customer ID:', customerId);
     
     if (!modal) {
         console.error('❌ Modal element bulunamadı');
@@ -1442,8 +1433,7 @@ async function openPolicyDetailsModal(buildingId) {
     contentEl.style.display = 'none';
     errorEl.style.display = 'none';
     
-    // Her iki key'i de kontrol et
-    const customerId = localStorage.getItem('customerId') || localStorage.getItem('customer_id');
+    // Token kontrol et
     const token = localStorage.getItem('authToken') || localStorage.getItem('token') || localStorage.getItem('auth_token');
     
     console.log('🔑 CustomerId:', customerId, 'Token:', token ? 'Var' : 'Yok');
@@ -1455,9 +1445,9 @@ async function openPolicyDetailsModal(buildingId) {
     }
     
     try {
-        console.log('📄 Poliçe detayları yükleniyor (customer_id):', customerId);
+        console.log('📄 Poliçe detayları yükleniyor');
         
-        // API'den poliçe detaylarını çek
+        // API'den poliçe detaylarını çek - KULLANICITYA ÖZELolması için customer_id kullan
         const response = await fetch(`/api/policy-details/${customerId}`, {
             headers: {
                 'Authorization': `Bearer ${token}`
@@ -1633,3 +1623,267 @@ function initDashboard() {
 }
 
 console.log('Dashboard initialized successfully!');
+
+// ===== YENİ POLİÇE BİLDİRİM FONKSİYONLARI =====
+
+// Yeni poliçe bildirim modalını aç
+function showNewPolicyNotification() {
+    const modal = document.getElementById('newPolicyNotificationModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.add('show');
+
+        // Modal dışına tıklayınca kapatma
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeNewPolicyModal();
+            }
+        });
+    }
+}
+
+// Yeni poliçe bildirim modalını kapat
+function closeNewPolicyModal() {
+    const modal = document.getElementById('newPolicyNotificationModal');
+    if (modal) {
+        modal.style.animation = 'fadeOut 0.3s ease-out';
+        setTimeout(() => {
+            modal.classList.remove('show');
+            modal.style.display = 'none';
+            modal.style.animation = '';
+        }, 300);
+    }
+}
+
+// Poliçe detaylarına git
+function goToPolicyDetails() {
+    closeNewPolicyModal();
+
+    // Poliçe Detayları sekmesine git
+    const policyDetailsNav = document.querySelector('[data-section="policy-details"]');
+    if (policyDetailsNav) {
+        policyDetailsNav.click();
+    }
+
+    // Sayfanın en üstüne scroll yap
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// "Yeni Poliçe Al" butonuna tıklandığında
+const newPolicyBtn = document.getElementById('newPolicyBtn');
+if (newPolicyBtn) {
+    newPolicyBtn.addEventListener('click', () => {
+        // Simülasyon: 1 saniye sonra bildirim göster
+        setTimeout(() => {
+            showNewPolicyNotification();
+        }, 1000);
+    });
+}
+
+// Fade Out animasyonunu ekle
+const styleEl = document.createElement('style');
+styleEl.textContent = `
+    @keyframes fadeOut {
+        from {
+            opacity: 1;
+            transform: scale(1);
+        }
+        to {
+            opacity: 0;
+            transform: scale(0.9);
+        }
+    }
+`;
+document.head.appendChild(styleEl);
+
+// Yardımcı fonksiyonlar - DÜZELTILMIŞ
+function formatCurrency(value) {
+    if (!value) return '-';
+    return new Intl.NumberFormat('tr-TR', {
+        style: 'currency',
+        currency: 'TRY',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2
+    }).format(value);
+}
+
+function formatDate(dateString) {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('tr-TR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    }).format(date);
+}
+
+// Her kelimenin başı büyük (Title Case)
+function capitalizeWords(str) {
+    if (!str) return '-';
+    return str
+        .toLowerCase()
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+}
+
+// Eski fonksiyon yerine yeni kullan
+function capitalizeFirst(str) {
+    if (!str) return '-';
+    return capitalizeWords(str);
+}
+
+function updatePolicyUI(policy) {
+    // Poliçe bilgilerini güncelleyelim - kullanıcıya özel
+    console.log('🔄 Poliçe UI güncelleniyor:', policy);
+
+    // Genel Bakış bölümündeki poliçe numarası
+    const policyNumEl = document.querySelector('.policy-card .value');
+    if (policyNumEl && policy.policy_number) {
+        policyNumEl.textContent = policy.policy_number;
+    }
+
+    // Bina bilgileri
+    if (policy.building_info) {
+        const addressEl = document.querySelector('[data-address]');
+        if (addressEl) {
+            addressEl.textContent = policy.building_info.address || policy.building_info.district;
+        }
+    }
+
+    // Teminat tutarı
+    const coverageEl = document.querySelector('[data-coverage]');
+    if (coverageEl && policy.max_coverage) {
+        coverageEl.textContent = `₺${policy.max_coverage.toLocaleString('tr-TR')}`;
+    }
+
+    // Paket türü - HER KELIMENIN BAŞI BÜYÜK
+    const packageEl = document.querySelector('.policy-card .policy-info:last-child .value');
+    if (packageEl && policy.package_type) {
+        const packageName = capitalizeWords(policy.package_type);
+        packageEl.textContent = `${packageName} Paket`;
+    }
+
+    console.log('✅ Poliçe UI güncellendi');
+}
+
+// displayPolicyDetails fonksiyonunda
+function displayPolicyDetails(policy) {
+    console.log('🔄 Poliçe detayları gösteriliyor:', policy);
+
+    // Güvenli element bulma helper
+    const safeSetText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value || '-';
+    };
+
+    // Poliçe Bilgileri
+    safeSetText('policyNumber', policy.policy_number);
+    safeSetText('packageType', capitalizeWords(policy.package_type)); // DÜZELTILMIŞ
+    safeSetText('startDate', formatDate(policy.policy_start_date));
+    safeSetText('endDate', formatDate(policy.policy_end_date));
+    safeSetText('policyStatus', policy.policy_status === 'Aktif' ? '✓ Aktif' : '✗ Pasif');
+    safeSetText('coverageAmount', formatCurrency(policy.max_coverage));
+
+    // Bina Bilgileri
+    const building = policy.building_info || {};
+    safeSetText('buildingAddress', building.address);
+    safeSetText('constructionYear', building.construction_year);
+    safeSetText('buildingAge', building.building_age ? `${building.building_age} yıl` : '-');
+    safeSetText('floorCount', building.floors);
+    safeSetText('buildingArea', building.building_area_m2 ? `${building.building_area_m2} m²` : '-');
+    safeSetText('structureType', capitalizeWords(building.structure_type)); // DÜZELTILMIŞ
+
+    // Risk Analizi
+    const risk = policy.risk_assessment || {};
+    const riskScore = parseFloat(risk.risk_score || 0.5);
+
+    const riskBar = document.getElementById('riskScoreBar');
+    if (riskBar) {
+        riskBar.style.width = (riskScore * 100) + '%';
+
+        // Risk rengi ayarla
+        if (riskScore < 0.3) {
+            riskBar.style.backgroundColor = '#10b981';
+        } else if (riskScore < 0.6) {
+            riskBar.style.backgroundColor = '#f59e0b';
+        } else {
+            riskBar.style.backgroundColor = '#ef4444';
+        }
+    }
+
+    safeSetText('riskScoreValue', riskScore.toFixed(4));
+    safeSetText('soilType', capitalizeWords(risk.soil_type)); // DÜZELTILMIŞ
+    safeSetText('faultDistance', risk.distance_to_fault_km ? `${Math.round(risk.distance_to_fault_km)} km` : '-');
+    safeSetText('nearestFault', capitalizeWords(risk.nearest_fault)); // DÜZELTILMIŞ
+    safeSetText('amplification', risk.soil_amplification ? risk.soil_amplification.toFixed(2) : '-');
+    safeSetText('liquefactionRisk', risk.liquefaction_risk ? `${(risk.liquefaction_risk * 100).toFixed(1)}%` : '-');
+
+    // Prim Bilgileri
+    safeSetText('annualPremium', formatCurrency(policy.annual_premium_tl));
+    safeSetText('monthlyPremium', formatCurrency(policy.monthly_premium_tl));
+    safeSetText('insuranceValue', formatCurrency(policy.coverage?.insurance_value_tl));
+    safeSetText('qualityScore', risk.quality_score ? parseFloat(risk.quality_score).toFixed(2) : '-');
+
+    console.log('✅ Poliçe detayları gösterildi');
+}
+
+// displayPolicyDetailsModal fonksiyonunda
+function displayPolicyDetailsModal(policy) {
+    console.log('🔄 Modal içinde poliçe gösteriliyor:', policy);
+
+    // Güvenli element bulma helper
+    const safeSetText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value || '-';
+    };
+
+    // Poliçe Bilgileri
+    safeSetText('modalPolicyNumber', policy.policy_number);
+    safeSetText('modalPackageType', capitalizeWords(policy.package_type)); // DÜZELTILMIŞ
+    safeSetText('modalStartDate', formatDate(policy.policy_start_date));
+    safeSetText('modalEndDate', formatDate(policy.policy_end_date));
+    safeSetText('modalPolicyStatus', policy.policy_status === 'Aktif' ? '✅ Aktif' : '❌ Pasif');
+    safeSetText('modalCoverage', formatCurrency(policy.max_coverage));
+
+    // Bina Bilgileri
+    const building = policy.building_info || {};
+    safeSetText('modalAddress', building.address);
+    safeSetText('modalConstructionYear', building.construction_year);
+    safeSetText('modalBuildingAge', building.building_age ? `${building.building_age} yıl` : '-');
+    safeSetText('modalFloors', building.floors);
+    safeSetText('modalBuildingArea', building.building_area_m2 ? `${building.building_area_m2} m²` : '-');
+    safeSetText('modalStructureType', capitalizeWords(building.structure_type)); // DÜZELTILMIŞ
+
+    // Risk Analizi
+    const risk = policy.risk_assessment || {};
+    const riskScore = parseFloat(risk.risk_score || 0.5);
+
+    const riskBar = document.getElementById('modalRiskBar');
+    if (riskBar) {
+        riskBar.style.width = (riskScore * 100) + '%';
+
+        // Risk rengi ayarla
+        if (riskScore < 0.3) {
+            riskBar.style.backgroundColor = '#10b981';
+        } else if (riskScore < 0.6) {
+            riskBar.style.backgroundColor = '#f59e0b';
+        } else {
+            riskBar.style.backgroundColor = '#ef4444';
+        }
+    }
+
+    safeSetText('modalRiskValue', riskScore.toFixed(4));
+    safeSetText('modalSoilType', capitalizeWords(risk.soil_type)); // DÜZELTILMIŞ
+    safeSetText('modalFaultDistance', risk.distance_to_fault_km ? `${Math.round(risk.distance_to_fault_km)} km` : '-');
+    safeSetText('modalNearestFault', capitalizeWords(risk.nearest_fault)); // DÜZELTILMIŞ
+    safeSetText('modalLiquefaction', risk.liquefaction_risk ? `${(risk.liquefaction_risk * 100).toFixed(1)}%` : '-');
+
+    // Prim Bilgileri
+    safeSetText('modalMonthlyPremium', formatCurrency(policy.monthly_premium_tl));
+    safeSetText('modalAnnualPremium', formatCurrency(policy.annual_premium_tl));
+    safeSetText('modalInsuranceValue', formatCurrency(policy.coverage?.insurance_value_tl));
+    safeSetText('modalQualityScore', risk.quality_score ? parseFloat(risk.quality_score).toFixed(2) : '-');
+
+    console.log('✅ Modal poliçe detayları gösterildi');
+}
