@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
 DASK+ Parametrik Sigorta - Ana Giriş Noktası
@@ -28,21 +28,51 @@ sys.path.insert(0, str(src_path))
 if __name__ == '__main__':
     from app import app, initialize_backend
     
-    print("\n" + "="*80)
-    print("🚀 DASK+ PARAMETRIK SIGORTA BACKEND")
+    # ASCII Art Banner
     print("="*80)
-    
-    # Backend initialize - Sadece ana process'te çalıştır
-    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-        # Bu reload worker'ı (asıl çalışan process)
-        initialize_backend()
-    
-    # Flask çalıştır
-    print("\n🌐 FLASK SERVER BAŞLATILIYOR...")
+    print("                                                                               ")
+    print("                    DASK+ PARAMETRİK SİGORTA SİSTEMİ                        ")
+    print("                                                                               ")
+    print("                Blockchain + AI Destekli Deprem Sigortası               ")
+    print("                                                                               ")
     print("="*80)
-    print("📍 Ana Sayfa: http://localhost:5000")
-    print("📍 Admin Panel: http://localhost:5000/admin")
-    print("💡 Çıkmak için: CTRL+C")
-    print("="*80 + "\n")
+    sys.stdout.flush()  # Banner'ı hemen göster
     
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Backend'i başlat - Sadece bir kez!
+    print(" Backend Servisleri Başlatılıyor...\n")
+    sys.stdout.flush()
+    
+    initialize_backend()
+    
+    print("="*80)
+    print("")
+    print("                          FLASK SERVER BAŞLATILIYOR                         ")
+    print("")
+    print("                                                                               ")
+    print("   Ana Sayfa:        http://localhost:5000                                  ")
+    print("   Admin Panel:      http://localhost:5000/admin                            ")
+    print("   Blockchain API:   http://localhost:5000/api/blockchain/stats             ")
+    print("                                                                               ")
+    print("   Çıkmak için CTRL+C tuşlarına basın                                       ")
+    print("                                                                               ")
+    print("="*80)
+    sys.stdout.flush()  # Server başlangıç mesajını hemen göster
+    
+    try:
+        # Flask sunucusunu başlat (blocking - sunucu kapanana kadar bekler)
+        app.run(
+            host='0.0.0.0',
+            port=5000,
+            debug=False,        # Production mode - Temiz çıktı
+            threaded=True,      # Thread desteği
+            use_reloader=False  # Auto-reload kapalı - Tek başlatma
+        )
+    except KeyboardInterrupt:
+        print("\n")
+        print("")
+        print("                           SERVER KAPATILIYOR...                            ")
+        print("")
+    finally:
+        print()
+        print(" DASK+ Backend başarıyla kapatıldı.")
+        print()

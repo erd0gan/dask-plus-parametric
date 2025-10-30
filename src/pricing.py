@@ -20,9 +20,9 @@ from functools import partial
 from pathlib import Path
 
 # Makine Öğrenmesi Kütüphaneleri
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score, KFold
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 from sklearn.neural_network import MLPRegressor
 import xgboost as xgb
 import lightgbm as lgb
@@ -679,7 +679,7 @@ class AIRiskPricingModel:
             'lgb_learning_rate': 0.05,
             'nn_hidden_layers': (100, 50, 25),
             'nn_max_iter': 500,
-            'test_size': 0.2,
+            'test_size': 0.3,
             'random_state': 42
         }
         
@@ -694,9 +694,22 @@ class AIRiskPricingModel:
             self.location_validator = None
         
     def prepare_features(self, buildings_df):
-        """Risk modellemesi için özellikler hazırla"""
+        """
+        Risk modellemesi için özellikler hazırla
+        
+        ✨ YENİ: 12 Ek Parametre Eklenmiş Hali ✨
+        - Konum detayları: district, neighborhood (granular risk)
+        - Yapısal detaylar: structure_type, apartment_count, residents, commercial_units
+        - Jeolojik detaylar: soil_type, nearest_fault
+        - Spatial features: lat/lon bazlı mesafe hesaplamaları
+        - Müşteri faktörü: customer_score (fraud/güvenilirlik)
+        """
         
         features = buildings_df.copy()
+        
+        # =========================================================================
+        # BÖLÜM 1: TEMEL VE MEVCUT FEATURES
+        # =========================================================================
         
         # damage_factor ekle (structure_type'a göre)
         if 'damage_factor' not in features.columns:
@@ -718,7 +731,7 @@ class AIRiskPricingModel:
             features.get('city_risk_factor', 1.0) * 0.2
         ).clip(0, 1)
         
-        # Türev özellikler
+        # Türev özellikler (mevcut)
         features['premium_to_value_ratio'] = features.get('annual_premium_tl', 0) / features['insurance_value_tl'].replace({0: np.nan})
         features['premium_to_value_ratio'].replace([np.inf, -np.inf], np.nan, inplace=True)
         features['premium_to_value_ratio'].fillna(0.008, inplace=True)
@@ -748,34 +761,164 @@ class AIRiskPricingModel:
         
         features['has_previous_damage_flag'] = features['has_previous_damage'].astype(int)
         
-        # AI risk skoru (daha gelişmiş)
+        # =========================================================================
+        # BÖLÜM 2: YENİ EK PARAMETRELER (12 ADET)
+        # =========================================================================
+        
+        # 1-2. DISTRICT & NEIGHBORHOOD RISK FACTORS (Granular konum riski)
+        # İlçe bazında risk haritası (örnek: İstanbul ilçeleri için AFAD verileri bazlı)
+        district_risk_map = {
+            'Fatih': 1.9, 'Beyoğlu': 1.85, 'Kadıköy': 1.75, 'Üsküdar': 1.8,
+            'Beşiktaş': 1.7, 'Şişli': 1.75, 'Bakırköy': 1.6, 'Zeytinburnu': 1.95,
+            'Avcılar': 2.0, 'Bahçelievler': 1.7, 'Esenler': 1.85, 'Gaziosmanpaşa': 1.8
+        }
+        features['district_risk_factor'] = features.get('district', pd.Series(dtype=str)).map(district_risk_map).fillna(1.5)
+        
+        # Mahalle yoğunluk faktörü (örnek: yüksek nüfuslu mahalleler için artış)
+        # Gerçek uygulamada mahalle bazında census verisi kullanılabilir
+        features['neighborhood_density_factor'] = 1.0  # Placeholder (veri varsa hesaplanabilir)
+        
+        # 3-4. SPATIAL FEATURES (Lat/Lon bazlı mesafe hesaplamaları)
+        # Fay hatlarına mesafe (mevcut distance_to_fault_km kullanılıyor, ek spatial analiz ekleyelim)
+        # Örnek: İstanbul merkezi (Fatih: 41.0186, 28.9498) uzaklık
+        istanbul_center = (41.0186, 28.9498)
+        if 'latitude' in features.columns and 'longitude' in features.columns:
+            features['distance_to_city_center_km'] = features.apply(
+                lambda row: geodesic((row['latitude'], row['longitude']), istanbul_center).km 
+                if pd.notna(row['latitude']) and pd.notna(row['longitude']) else 0,
+                axis=1
+            )
+            # Merkeze yakınlık faktörü (yüksek yoğunluk = yüksek risk)
+            features['proximity_risk_factor'] = np.where(
+                features['distance_to_city_center_km'] < 10, 1.3,
+                np.where(features['distance_to_city_center_km'] < 30, 1.1, 1.0)
+            )
+        else:
+            features['distance_to_city_center_km'] = 0
+            features['proximity_risk_factor'] = 1.0
+        
+        # 5. STRUCTURE_TYPE INTERACTION (Yapı tipi ile yaş etkileşimi)
+        # Zaten encoding yapılacak, ek türev feature ekleyelim
+        features['structure_age_interaction'] = features['damage_factor'] * (features['building_age'] / 50)
+        
+        # 6-7-8. APARTMENT_COUNT, RESIDENTS, COMMERCIAL_UNITS (Yoğunluk metrikleri)
+        # Bina komplekslik skoru
+        features['building_complexity_score'] = (
+            np.log1p(features.get('apartment_count', 1)) * 0.4 +
+            np.log1p(features.get('residents', 1)) * 0.3 +
+            np.log1p(features.get('commercial_units', 0)) * 0.3
+        )
+        
+        # Ticari/residential miksi (değiştirilmiş commercial_ratio - daha sofistike)
+        total_units = features.get('apartment_count', 1) + features.get('commercial_units', 0)
+        features['mixed_use_factor'] = np.where(
+            features.get('commercial_units', 0) > 0,
+            1.1,  # Karma kullanım riski artırır (evacuation kompleksliği)
+            1.0
+        )
+        
+        # 9-10. SOIL_TYPE & NEAREST_FAULT (Jeolojik detaylar)
+        # Zemin tipi risk haritası (A=en sağlam, E=en zayıf)
+        soil_risk_map = {
+            'A': 0.8, 'B': 1.0, 'C': 1.2, 'D': 1.5, 'E': 1.8,
+            'ZA': 0.9, 'ZB': 1.1, 'ZC': 1.3, 'ZD': 1.6, 'ZE': 2.0
+        }
+        features['soil_risk_factor'] = features.get('soil_type', pd.Series(dtype=str)).map(soil_risk_map).fillna(1.2)
+        
+        # Fay hattı tipi risk faktörü
+        fault_risk_map = {
+            'KAF': 1.9,   # Kuzey Anadolu Fayı (en aktif)
+            'DAF': 1.7,   # Doğu Anadolu Fayı
+            'BZBF': 1.6,  # Batı Anadolu Fay Bölgesi
+            'Other': 1.0
+        }
+        features['fault_type_risk_factor'] = features.get('nearest_fault', pd.Series(dtype=str)).map(fault_risk_map).fillna(1.0)
+        
+        # Fay mesafesi + fay tipi kombinasyonu
+        if 'distance_to_fault_km' in features.columns:
+            features['fault_combined_risk'] = (
+                features['fault_type_risk_factor'] * 
+                np.exp(-features['distance_to_fault_km'] / 100)  # Exponential decay
+            )
+        else:
+            features['fault_combined_risk'] = 1.0
+        
+        # 11. CUSTOMER_SCORE (Müşteri güvenilirlik - fraud/personalization için)
+        # Yüksek skor = düşük fraud riski = prim indirimi olabilir
+        if 'customer_score' not in features.columns:
+            features['customer_score'] = 75  # Default (orta seviye)
+        
+        features['customer_reliability_factor'] = np.where(
+            features['customer_score'] >= 80, 0.95,  # Güvenilir müşteri - %5 indirim
+            np.where(features['customer_score'] >= 60, 1.0,  # Normal
+                    1.1)  # Düşük skor - %10 artış
+        )
+        
+        # 12. MULTI-PARAMETER COMPOSITE INDEX (Kombinasyon metrikleri)
+        # Jeolojik+Yapısal+Demografik faktörlerin weighted kombinasyonu
+        features['composite_risk_index'] = (
+            features['soil_risk_factor'] * 0.25 +
+            features['fault_combined_risk'] * 0.25 +
+            features['district_risk_factor'] / 2 * 0.20 +  # Normalize to ~1.0
+            features['building_complexity_score'] / 5 * 0.15 +  # Normalize
+            features['structure_age_interaction'] / 2 * 0.15  # Normalize
+        ).clip(0, 3)
+        
+        # =========================================================================
+        # BÖLÜM 3: GELİŞTİRİLMİŞ AI RISK SKORU
+        # =========================================================================
+        
+        # AI risk skoru (kapsamlı feature set ile hesaplama)
         features['ai_risk_score'] = (
-            (features['building_age'] / 100) * 0.2 +
-            features['damage_factor'] * 0.15 +
-            features['liquefaction_risk'] * 0.15 +
-            (1 - features['quality_score'] / 10) * 0.15 +
-            features['city_risk_factor'] * 0.15 +
-            features['has_previous_damage_flag'] * 0.1 +
-            (features['previous_damage_count'] / 5) * 0.1
+            (features['building_age'] / 100) * 0.12 +
+            features['damage_factor'] * 0.10 +
+            features['liquefaction_risk'] * 0.10 +
+            (1 - features['quality_score'] / 10) * 0.10 +
+            features['city_risk_factor'] / 2 * 0.08 +  # Normalize to ~1.0
+            features['has_previous_damage_flag'] * 0.08 +
+            (features['previous_damage_count'] / 5) * 0.05 +
+            # Ek parametreler (toplam %37 ağırlık)
+            features['district_risk_factor'] / 2 * 0.08 +
+            features['soil_risk_factor'] / 2 * 0.07 +
+            features['fault_combined_risk'] * 0.07 +
+            features['proximity_risk_factor'] * 0.05 +
+            features['building_complexity_score'] / 5 * 0.05 +
+            features['composite_risk_index'] / 3 * 0.05
         ).clip(0, 1)
         
-        # Final risk skoru
+        # Final risk skoru (AI + Base kombinasyonu)
         features['risk_score'] = (
-            features['ai_risk_score'] * 0.6 + 
-            features['base_risk_score'] * 0.4
+            features['ai_risk_score'] * 0.7 +  # AI ağırlığı artırıldı (daha fazla feature)
+            features['base_risk_score'] * 0.3
         ).clip(0, 1)
+        
+        # =========================================================================
+        # TEMİZLİK VE NORMALIZASYON
+        # =========================================================================
         
         features.replace([np.inf, -np.inf], 0, inplace=True)
         features.fillna(0, inplace=True)
         
+        print(f"✨ Feature Engineering Tamamlandı: {len(features.columns)} sütun")
+        print(f"   📝 Not: Model eğitiminde 33 numerik + 7 encoded = 40 feature kullanılacak")
+        
         return features
     
     def train_risk_model(self, features_df):
-        """Risk tahmin modeli eğit"""
+        """
+        Risk tahmin modeli eğit
+        
+        Kapsamlı feature set ve ensemble learning kullanarak risk tahmini yapar
+        """
         
         print("\n🤖 AI Risk Modeli Eğitiliyor...")
+        print(f"   📊 Toplam veri: {len(features_df)} bina")
         
-        # Özellik sütunları
+        # =========================================================================
+        # ÖZELLIK SÜTUNLARI (MEVCUT + 12 YENİ PARAMETRE)
+        # =========================================================================
+        
+        # Mevcut features
         feature_cols = [
             'latitude', 'longitude', 'floors', 'soil_amplification',
             'liquefaction_risk', 'damage_factor', 'building_area_m2',
@@ -786,21 +929,73 @@ class AIRiskPricingModel:
             'previous_damage_count'
         ]
         
-        # Kategorik değişkenleri encode et
+        # ✨ YENİ PARAMETRELER (12 adet)
+        new_features = [
+            # Granular konum riski
+            'district_risk_factor',
+            'neighborhood_density_factor',
+            # Spatial features
+            'distance_to_city_center_km',
+            'proximity_risk_factor',
+            # Yapısal etkileşimler
+            'structure_age_interaction',
+            # Yoğunluk metrikleri
+            'building_complexity_score',
+            'mixed_use_factor',
+            # Jeolojik detaylar
+            'soil_risk_factor',
+            'fault_type_risk_factor',
+            'fault_combined_risk',
+            # Müşteri faktörü
+            'customer_reliability_factor',
+            # Composite index
+            'composite_risk_index'
+        ]
+        
+        feature_cols.extend(new_features)
+        print(f"   ✨ Numerik feature sayısı: {len(feature_cols)}")
+        
+        # =========================================================================
+        # KATEGORİK DEĞİŞKENLERİ ENCODE ET
+        # =========================================================================
+        
         le_struct = LabelEncoder()
         le_soil = LabelEncoder()
         le_city = LabelEncoder()
         le_policy = LabelEncoder()
+        le_district = LabelEncoder()
+        le_neighborhood = LabelEncoder()
+        le_fault = LabelEncoder()
         
         features_df['structure_type_encoded'] = le_struct.fit_transform(features_df['structure_type'])
         features_df['soil_type_encoded'] = le_soil.fit_transform(features_df['soil_type'])
         features_df['city_encoded'] = le_city.fit_transform(features_df['city'])
         features_df['policy_status_encoded'] = le_policy.fit_transform(features_df['policy_status'])
         
+        # District, Neighborhood, Fault encoding
+        if 'district' in features_df.columns:
+            features_df['district_encoded'] = le_district.fit_transform(features_df['district'].fillna('Unknown'))
+        else:
+            features_df['district_encoded'] = 0
+        
+        if 'neighborhood' in features_df.columns:
+            features_df['neighborhood_encoded'] = le_neighborhood.fit_transform(features_df['neighborhood'].fillna('Unknown'))
+        else:
+            features_df['neighborhood_encoded'] = 0
+        
+        if 'nearest_fault' in features_df.columns:
+            features_df['fault_encoded'] = le_fault.fit_transform(features_df['nearest_fault'].fillna('Unknown'))
+        else:
+            features_df['fault_encoded'] = 0
+        
         feature_cols.extend([
             'structure_type_encoded', 'soil_type_encoded',
-            'city_encoded', 'policy_status_encoded'
+            'city_encoded', 'policy_status_encoded',
+            'district_encoded', 'neighborhood_encoded', 'fault_encoded'
         ])
+        
+        print(f"   ✨ Encoded feature sayısı: 7")
+        print(f"   🎯 TOPLAM FEATURE: {len(feature_cols)} (33 numerik + 7 encoded)")
         
         # Veri hazırlığı
         X = features_df[feature_cols]
@@ -865,43 +1060,112 @@ class AIRiskPricingModel:
         ])
         ensemble_pred = np.mean(predictions, axis=1)
         
-        # Model performansı
+        # =========================================================================
+        # MODEL PERFORMANSI - DETAYLI METRİKLER
+        # =========================================================================
+        
+        # Test seti metrikleri
         mse = mean_squared_error(y_test, ensemble_pred)
         r2 = r2_score(y_test, ensemble_pred)
         rmse = np.sqrt(mse)
-        mae = np.mean(np.abs(y_test - ensemble_pred))
+        mae = mean_absolute_error(y_test, ensemble_pred)
+        
+        # Cross-validation (5-fold)
+        print("\n🔄 Cross-Validation (5-Fold) yapılıyor...")
+        kfold = KFold(n_splits=5, shuffle=True, random_state=self.config['random_state'])
+        
+        # Her model için CV skoru
+        cv_scores_xgb = cross_val_score(xgb_model, X_train_scaled, y_train, cv=kfold, scoring='r2')
+        cv_scores_lgb = cross_val_score(lgb_model, X_train_scaled, y_train, cv=kfold, scoring='r2')
+        
+        cv_mean_xgb = cv_scores_xgb.mean()
+        cv_std_xgb = cv_scores_xgb.std()
+        cv_mean_lgb = cv_scores_lgb.mean()
+        cv_std_lgb = cv_scores_lgb.std()
+        
+        # Training seti metrikleri (overfitting kontrolü)
+        train_pred = np.mean(np.column_stack([
+            xgb_model.predict(X_train_scaled),
+            lgb_model.predict(X_train_scaled),
+            nn_model.predict(X_train_scaled)
+        ]), axis=1)
+        
+        train_r2 = r2_score(y_train, train_pred)
+        train_mse = mean_squared_error(y_train, train_pred)
         
         self.mse = mse
         self.r2 = r2
         
-        # Model metriklerini kaydet
+        # Geliştirilmiş model metrikleri
         self.model_metrics = {
-            'mse': round(float(mse), 6),
-            'rmse': round(float(rmse), 6),
-            'mae': round(float(mae), 6),
-            'r2_score': round(float(r2), 4),
+            # Test metrikleri
+            'test_mse': round(float(mse), 6),
+            'test_rmse': round(float(rmse), 6),
+            'test_mae': round(float(mae), 6),
+            'test_r2_score': round(float(r2), 4),
+            
+            # Training metrikleri
+            'train_r2_score': round(float(train_r2), 4),
+            'train_mse': round(float(train_mse), 6),
+            
+            # Cross-validation
+            'cv_xgb_mean': round(float(cv_mean_xgb), 4),
+            'cv_xgb_std': round(float(cv_std_xgb), 4),
+            'cv_lgb_mean': round(float(cv_mean_lgb), 4),
+            'cv_lgb_std': round(float(cv_std_lgb), 4),
+            
+            # Overfitting kontrolü
+            'overfitting_gap': round(float(train_r2 - r2), 4),
+            
+            # Genel bilgiler
             'training_samples': len(X_train),
             'test_samples': len(X_test),
             'features_count': len(feature_cols),
             'models': ['XGBoost', 'LightGBM', 'Neural Network'],
-            'ensemble_method': 'mean'
+            'ensemble_method': 'mean',
+            'train_test_split': f"{int((1-self.config['test_size'])*100)}/{int(self.config['test_size']*100)}",
+            
+            # 🕒 Timestamp (model eğitim tarihi)
+            'timestamp': pd.Timestamp.now().isoformat(),
+            'last_trained': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         
         print(f"\n✅ Model Performansı:")
-        print(f"  - MSE: {mse:.6f}")
-        print(f"  - RMSE: {rmse:.6f}")
-        print(f"  - MAE: {mae:.6f}")
-        print(f"  - R² Score: {r2:.4f}")
+        print(f"  📊 Test Metrikleri:")
+        print(f"    - MSE: {mse:.6f}")
+        print(f"    - RMSE: {rmse:.6f}")
+        print(f"    - MAE: {mae:.6f}")
+        print(f"    - R² Score: {r2:.4f}")
+        print(f"\n  📊 Training Metrikleri:")
+        print(f"    - R² Score: {train_r2:.4f}")
+        print(f"    - Overfitting Gap: {train_r2 - r2:.4f}")
+        print(f"\n  📊 Cross-Validation (5-Fold):")
+        print(f"    - XGBoost R²: {cv_mean_xgb:.4f} (±{cv_std_xgb:.4f})")
+        print(f"    - LightGBM R²: {cv_mean_lgb:.4f} (±{cv_std_lgb:.4f})")
         
-        # Feature importance
+        # =========================================================================
+        # FEATURE IMPORTANCE ANALİZİ (GELİŞTİRİLMİŞ)
+        # =========================================================================
+        
+        print(f"\n⭐ Feature Importance Analizi:")
+        
+        # XGBoost feature importance
         self.feature_importance = pd.DataFrame({
             'feature': feature_cols,
-            'importance': xgb_model.feature_importances_
-        }).sort_values('importance', ascending=False)
+            'xgb_importance': xgb_model.feature_importances_,
+            'lgb_importance': lgb_model.feature_importances_
+        }).sort_values('xgb_importance', ascending=False)
         
-        print(f"\n⭐ En Önemli 5 Özellik:")
-        for idx, row in self.feature_importance.head(5).iterrows():
-            print(f"  {row['feature']}: {row['importance']:.4f}")
+        # Ensemble importance (ortalama)
+        self.feature_importance['ensemble_importance'] = (
+            self.feature_importance['xgb_importance'] * 0.5 +
+            self.feature_importance['lgb_importance'] * 0.5
+        )
+        self.feature_importance = self.feature_importance.sort_values('ensemble_importance', ascending=False)
+        
+        print(f"\n  📊 Top 10 En Önemli Features:")
+        for idx, row in self.feature_importance.head(10).iterrows():
+            print(f"    {idx+1}. {row['feature']}: {row['ensemble_importance']:.4f}")
         
         # Final modeli kaydet
         self.risk_model = {
@@ -912,10 +1176,93 @@ class AIRiskPricingModel:
             'le_struct': le_struct,
             'le_soil': le_soil,
             'le_city': le_city,
-            'le_policy': le_policy
+            'le_policy': le_policy,
+            'le_district': le_district,
+            'le_neighborhood': le_neighborhood,
+            'le_fault': le_fault
         }
         
         return self.risk_model
+    
+    def predict_risk(self, features_df):
+        """
+        Eğitilmiş AI modeli ile risk skorlarını tahmin et
+        
+        Args:
+            features_df: Prepare edilmiş features DataFrame
+            
+        Returns:
+            numpy.array: Tahmin edilen risk skorları
+        """
+        if self.risk_model is None:
+            raise ValueError("❌ Risk modeli henüz eğitilmemiş!")
+        
+        # Encoder'ları al
+        le_struct = self.risk_model['le_struct']
+        le_soil = self.risk_model['le_soil']
+        le_city = self.risk_model['le_city']
+        le_policy = self.risk_model['le_policy']
+        le_district = self.risk_model['le_district']
+        le_neighborhood = self.risk_model['le_neighborhood']
+        le_fault = self.risk_model['le_fault']
+        
+        # Kategorik değişkenleri encode et (eğer yoksa)
+        if 'structure_type_encoded' not in features_df.columns:
+            features_df = features_df.copy()
+            
+            # Safe transform: unknown değerleri handle et
+            def safe_transform(encoder, values, default_value=0):
+                """LabelEncoder'ı güvenli şekilde uygula - yeni değerleri handle eder"""
+                result = []
+                known_classes = set(encoder.classes_)
+                for val in values:
+                    if pd.isna(val) or val not in known_classes:
+                        result.append(default_value)
+                    else:
+                        result.append(encoder.transform([val])[0])
+                return result
+            
+            features_df['structure_type_encoded'] = safe_transform(le_struct, features_df['structure_type'])
+            features_df['soil_type_encoded'] = safe_transform(le_soil, features_df['soil_type'])
+            features_df['city_encoded'] = safe_transform(le_city, features_df['city'])
+            features_df['policy_status_encoded'] = safe_transform(le_policy, features_df['policy_status'])
+            
+            if 'district' in features_df.columns:
+                features_df['district_encoded'] = safe_transform(le_district, features_df['district'].fillna('Unknown'))
+            else:
+                features_df['district_encoded'] = 0
+            
+            if 'neighborhood' in features_df.columns:
+                features_df['neighborhood_encoded'] = safe_transform(le_neighborhood, features_df['neighborhood'].fillna('Unknown'))
+            else:
+                features_df['neighborhood_encoded'] = 0
+            
+            if 'nearest_fault' in features_df.columns:
+                features_df['fault_encoded'] = safe_transform(le_fault, features_df['nearest_fault'].fillna('Unknown'))
+            else:
+                features_df['fault_encoded'] = 0
+        
+        # Feature kolonları al
+        feature_cols = self.risk_model['feature_cols']
+        
+        # Veriyi hazırla
+        X = features_df[feature_cols]
+        
+        # Ölçeklendir
+        X_scaled = self.scaler.transform(X)
+        
+        # Ensemble prediction
+        xgb_pred = self.risk_model['xgb'].predict(X_scaled)
+        lgb_pred = self.risk_model['lgb'].predict(X_scaled)
+        nn_pred = self.risk_model['nn'].predict(X_scaled)
+        
+        # Ortalama al (ensemble)
+        ensemble_pred = np.mean([xgb_pred, lgb_pred, nn_pred], axis=0)
+        
+        # 0-1 arasına normalize et
+        ensemble_pred = np.clip(ensemble_pred, 0.0, 1.0)
+        
+        return ensemble_pred
     
     def calculate_dynamic_premium(self, building_features, seismic_analyzer=None):
         """
@@ -1322,7 +1669,9 @@ class PricingVisualization:
         if risk_model.feature_importance is not None:
             top_12 = risk_model.feature_importance.head(12)
             colors_fi = plt.cm.viridis(np.linspace(0.2, 0.9, len(top_12)))
-            bars = ax4.barh(range(len(top_12)), top_12['importance'],
+            # YENİ: ensemble_importance kullan (importance yerine)
+            importance_col = 'ensemble_importance' if 'ensemble_importance' in top_12.columns else 'importance'
+            bars = ax4.barh(range(len(top_12)), top_12[importance_col],
                            color=colors_fi, alpha=0.85, edgecolor='black')
             ax4.set_yticks(range(len(top_12)))
             ax4.set_yticklabels(top_12['feature'], fontsize=10)
@@ -1333,18 +1682,27 @@ class PricingVisualization:
         
         # 5. Model Performansı
         ax5 = fig.add_subplot(gs[1, 2])
-        metrics_names = ['MSE', 'R² Score']
-        metrics_values = [risk_model.mse, risk_model.r2]
-        colors_metrics = ['#e74c3c', '#2ecc71']
-        bars = ax5.bar(metrics_names, metrics_values, color=colors_metrics,
-                      alpha=0.8, edgecolor='black', width=0.6)
-        ax5.set_title('Model Performansı', fontsize=14, fontweight='bold')
-        ax5.set_ylabel('Değer', fontweight='bold')
-        ax5.grid(axis='y', alpha=0.3)
-        for bar, val in zip(bars, metrics_values):
-            height = bar.get_height()
-            ax5.text(bar.get_x() + bar.get_width()/2., height,
-                    f'{val:.4f}', ha='center', va='bottom', fontweight='bold')
+        
+        # Model metrikleri varsa göster
+        if hasattr(risk_model, 'model_metrics') and risk_model.model_metrics:
+            test_r2 = risk_model.model_metrics.get('test_r2_score', 0)
+            test_mse = risk_model.model_metrics.get('test_mse', 0)
+            metrics_names = ['MSE', 'R² Score']
+            metrics_values = [test_mse, test_r2]
+            colors_metrics = ['#e74c3c', '#2ecc71']
+            bars = ax5.bar(metrics_names, metrics_values, color=colors_metrics,
+                          alpha=0.8, edgecolor='black', width=0.6)
+            ax5.set_title('Model Performansı', fontsize=14, fontweight='bold')
+            ax5.set_ylabel('Değer', fontweight='bold')
+            ax5.grid(axis='y', alpha=0.3)
+            for bar, val in zip(bars, metrics_values):
+                height = bar.get_height()
+                ax5.text(bar.get_x() + bar.get_width()/2., height,
+                        f'{val:.4f}', ha='center', va='bottom', fontweight='bold')
+        else:
+            ax5.text(0.5, 0.5, 'Model metrikleri\nmevcut değil', 
+                    ha='center', va='center', fontsize=12, transform=ax5.transAxes)
+            ax5.axis('off')
         
         # 6. Şehir Bazlı Ortalama Risk
         ax6 = fig.add_subplot(gs[2, 0])
@@ -1357,17 +1715,28 @@ class PricingVisualization:
         ax6.set_title('Şehir Bazlı Risk', fontsize=14, fontweight='bold')
         ax6.grid(axis='x', alpha=0.3)
         
-        # 7. Bina Yaşı vs Risk
+        # 7. Bina Yaşı vs Risk (KONTROL EDİLMİŞ)
         ax7 = fig.add_subplot(gs[2, 1])
-        sample = buildings_df.sample(min(1000, len(buildings_df)))
-        scatter = ax7.scatter(sample['building_age'], sample['risk_score'],
-                            c=sample['risk_score'], cmap='RdYlGn_r',
-                            alpha=0.6, s=40, edgecolors='black', linewidth=0.5)
-        ax7.set_xlabel('Bina Yaşı (Yıl)', fontweight='bold')
-        ax7.set_ylabel('Risk Skoru', fontweight='bold')
-        ax7.set_title('Bina Yaşı vs Risk', fontsize=14, fontweight='bold')
-        ax7.grid(alpha=0.3)
-        plt.colorbar(scatter, ax=ax7, label='Risk Skoru')
+        
+        # Building age kontrolü - yoksa construction_year'dan hesapla
+        if 'building_age' not in buildings_df.columns and 'construction_year' in buildings_df.columns:
+            import datetime
+            current_year = datetime.datetime.now().year
+            buildings_df['building_age'] = current_year - buildings_df['construction_year']
+        
+        if 'building_age' in buildings_df.columns and 'risk_score' in buildings_df.columns:
+            sample = buildings_df.sample(min(1000, len(buildings_df)))
+            scatter = ax7.scatter(sample['building_age'], sample['risk_score'],
+                                c=sample['risk_score'], cmap='RdYlGn_r',
+                                alpha=0.6, s=40, edgecolors='black', linewidth=0.5)
+            ax7.set_xlabel('Bina Yaşı (Yıl)', fontweight='bold')
+            ax7.set_ylabel('Risk Skoru', fontweight='bold')
+            ax7.set_title('Bina Yaşı vs Risk', fontsize=14, fontweight='bold')
+            ax7.grid(alpha=0.3)
+            plt.colorbar(scatter, ax=ax7, label='Risk Skoru')
+        else:
+            ax7.text(0.5, 0.5, 'Veri Eksik', ha='center', va='center', fontsize=16)
+            ax7.axis('off')
         
         # 8. İstatistikler
         ax8 = fig.add_subplot(gs[2, 2])
@@ -1426,13 +1795,18 @@ class DASKPlusPricingSystem:
         print("="*70)
         
         import os
-        self.results_dir = 'results'
+        from pathlib import Path
+        
+        # Ana proje dizinine göre results klasörü
+        SRC_DIR = Path(__file__).parent
+        ROOT_DIR = SRC_DIR.parent
+        self.results_dir = ROOT_DIR / 'results'
         os.makedirs(self.results_dir, exist_ok=True)
         
         self.data_loader = BuildingDataLoader()
         self.seismic_analyzer = RealEarthquakeDataAnalyzer()
         self.pricing_model = AIRiskPricingModel()
-        self.visualization = PricingVisualization(results_dir=self.results_dir)
+        self.visualization = PricingVisualization(results_dir=str(self.results_dir))
         
         self.buildings_df = None
         self.features_df = None
@@ -1548,17 +1922,279 @@ class DASKPlusPricingSystem:
         print(f"   Paket Yükseltme Sayısı: {self.features_df['package_upgraded'].sum():,}")
     
     def generate_reports(self):
-        """Raporlar oluştur"""
+        """Raporlar oluştur ve tüm sonuçları kaydet"""
         
         print("\n6️⃣ Görsel raporlar oluşturuluyor...")
         
-        # Dashboard
-        self.visualization.create_pricing_dashboard(self.features_df, self.pricing_model)
+        # Dashboard - pricing_model.features_df kullan (hata olursa devam et)
+        try:
+            if hasattr(self.pricing_model, 'features_df') and self.pricing_model.features_df is not None:
+                self.visualization.create_pricing_dashboard(self.pricing_model.features_df, self.pricing_model)
+                print("✅ Dashboard oluşturuldu")
+        except Exception as e:
+            print(f"⚠️ Dashboard oluşturulamadı: {e}")
+            print("💡 Diğer raporlar oluşturuluyor...")
         
-        # CSV olarak kaydet
-        output_file = f'{self.results_dir}/dynamic_pricing_results.csv'
-        self.features_df.to_csv(output_file, index=False, encoding='utf-8-sig')
-        print(f"✅ Fiyatlandırma sonuçları kaydedildi: {output_file}")
+        # =========================================================================
+        # 1. ANA SONUÇLAR CSV (Tüm Features + Prim Bilgileri)
+        # =========================================================================
+        if hasattr(self.pricing_model, 'features_df') and self.pricing_model.features_df is not None:
+            output_file = f'{self.results_dir}/dynamic_pricing_results.csv'
+            self.pricing_model.features_df.to_csv(output_file, index=False, encoding='utf-8-sig')
+            print(f"✅ Fiyatlandırma sonuçları kaydedildi: {output_file}")
+        
+        # =========================================================================
+        # 2. FEATURE IMPORTANCE (Detaylı)
+        # =========================================================================
+        if hasattr(self.pricing_model, 'feature_importance') and self.pricing_model.feature_importance is not None:
+            importance_file = f'{self.results_dir}/feature_importance_detailed.csv'
+            self.pricing_model.feature_importance.to_csv(importance_file, index=False, encoding='utf-8-sig')
+            print(f"✅ Feature importance kaydedildi: {importance_file}")
+        
+        # =========================================================================
+        # 3. MODEL METRİKLERİ (JSON)
+        # =========================================================================
+        if hasattr(self.pricing_model, 'model_metrics') and self.pricing_model.model_metrics is not None:
+            import json
+            metrics_file = f'{self.results_dir}/model_metrics.json'
+            with open(metrics_file, 'w', encoding='utf-8') as f:
+                json.dump(self.pricing_model.model_metrics, f, indent=2, ensure_ascii=False)
+            print(f"✅ Model metrikleri kaydedildi: {metrics_file}")
+        
+        # Features DataFrame kontrolü
+        features_df = self.pricing_model.features_df if hasattr(self.pricing_model, 'features_df') else None
+        if features_df is None:
+            print("⚠️ Features DataFrame bulunamadı, raporlar kısıtlı oluşturulacak")
+            return
+        
+        print(f"📊 Features DataFrame: {len(features_df)} satır, {len(features_df.columns)} sütun")
+        print(f"   Sütunlar: {', '.join(features_df.columns[:10])}..." if len(features_df.columns) > 10 else f"   Sütunlar: {', '.join(features_df.columns)}")
+        
+        # =========================================================================
+        # 4. ÖZETLENMİŞ İSTATİSTİKLER (Özet Rapor)
+        # =========================================================================
+        summary_stats = {
+            'Genel Bilgiler': {
+                'Toplam Bina': len(features_df),
+                'Aktif Poliçe': int(features_df[features_df['policy_status'] == 'active'].shape[0]) if 'policy_status' in features_df.columns else 0,
+                'Şehir Sayısı': int(features_df['city'].nunique()) if 'city' in features_df.columns else 0,
+                'İlçe Sayısı': int(features_df['district'].nunique() if 'district' in features_df.columns else 0),
+            },
+            'Finansal Özet': {
+                'Toplam Yıllık Prim (TL)': float(features_df['annual_premium_tl'].sum()) if 'annual_premium_tl' in features_df.columns else 0,
+                'Ortalama Yıllık Prim (TL)': float(features_df['annual_premium_tl'].mean()) if 'annual_premium_tl' in features_df.columns else 0,
+                'Medyan Yıllık Prim (TL)': float(features_df['annual_premium_tl'].median()) if 'annual_premium_tl' in features_df.columns else 0,
+                'Min Prim (TL)': float(features_df['annual_premium_tl'].min()) if 'annual_premium_tl' in features_df.columns else 0,
+                'Max Prim (TL)': float(features_df['annual_premium_tl'].max()) if 'annual_premium_tl' in features_df.columns else 0,
+                'Toplam Teminat (TL)': float(features_df['insurance_value_tl'].sum()) if 'insurance_value_tl' in features_df.columns else 0,
+            },
+            'Risk Analizi': {
+                'Ortalama Risk Skoru': float(features_df['risk_score'].mean()) if 'risk_score' in features_df.columns else 0,
+                'Medyan Risk Skoru': float(features_df['risk_score'].median()) if 'risk_score' in features_df.columns else 0,
+                'Ortalama Risk Faktörü': float(features_df['combined_risk_factor'].mean()) if 'combined_risk_factor' in features_df.columns else 0,
+                'Yüksek Risk Binalar (>0.7)': int((features_df['risk_score'] > 0.7).sum()) if 'risk_score' in features_df.columns else 0,
+                'Düşük Risk Binalar (<0.3)': int((features_df['risk_score'] < 0.3).sum()) if 'risk_score' in features_df.columns else 0,
+            },
+            'Paket Dağılımı': {
+                paket: int((features_df['package_type'] == paket).sum())
+                for paket in features_df['package_type'].unique()
+            } if 'package_type' in features_df.columns else {},
+            'Paket Yükseltme': {
+                'Toplam Yükseltme': int(features_df['package_upgraded'].sum()) if 'package_upgraded' in features_df.columns else 0,
+                'Yükseltme Oranı (%)': float((features_df['package_upgraded'].sum() / len(features_df)) * 100) if 'package_upgraded' in features_df.columns else 0,
+            },
+            'Model Performansı': self.pricing_model.model_metrics if hasattr(self.pricing_model, 'model_metrics') else {},
+            'Feature Count': len(self.pricing_model.risk_model['feature_cols']) if hasattr(self.pricing_model, 'risk_model') else 0
+        }
+        
+        summary_file = f'{self.results_dir}/summary_statistics.json'
+        import json
+        with open(summary_file, 'w', encoding='utf-8') as f:
+            json.dump(summary_stats, f, indent=2, ensure_ascii=False)
+        print(f"✅ Özet istatistikler kaydedildi: {summary_file}")
+        
+        # =========================================================================
+        # 5. PAKET BAZINDA DETAYLI ANALİZ
+        # =========================================================================
+        if 'package_type' in features_df.columns:
+            package_analysis = features_df.groupby('package_type').agg({
+                'building_id': 'count',
+                'annual_premium_tl': ['mean', 'median', 'min', 'max', 'sum'],
+                'risk_score': ['mean', 'median'],
+                'insurance_value_tl': ['mean', 'sum'],
+                'combined_risk_factor': 'mean',
+                'package_upgraded': 'sum'
+            }).round(2)
+            
+            package_analysis.columns = ['_'.join(col).strip() for col in package_analysis.columns.values]
+            package_file = f'{self.results_dir}/package_analysis.csv'
+            package_analysis.to_csv(package_file, encoding='utf-8-sig')
+            print(f"✅ Paket analizi kaydedildi: {package_file}")
+        
+        # =========================================================================
+        # 6. ŞEHİR/İLÇE BAZINDA ANALİZ
+        # =========================================================================
+        if 'district' in features_df.columns:
+            district_analysis = features_df.groupby(['city', 'district']).agg({
+                'building_id': 'count',
+                'annual_premium_tl': 'mean',
+                'risk_score': 'mean',
+                'district_risk_factor': 'first',
+                'soil_risk_factor': 'mean',
+                'fault_combined_risk': 'mean',
+            }).round(4)
+            
+            district_analysis.columns = ['Bina_Sayisi', 'Ort_Prim_TL', 'Ort_Risk_Skoru', 
+                                         'District_Risk', 'Ort_Soil_Risk', 'Ort_Fault_Risk']
+            district_file = f'{self.results_dir}/district_risk_analysis.csv'
+            district_analysis.to_csv(district_file, encoding='utf-8-sig')
+            print(f"✅ İlçe bazlı analiz kaydedildi: {district_file}")
+        
+        # =========================================================================
+        # 7. YAPI TİPİ ANALİZİ
+        # =========================================================================
+        if 'structure_type' in features_df.columns:
+            structure_analysis = features_df.groupby('structure_type').agg({
+                'building_id': 'count',
+                'annual_premium_tl': 'mean',
+                'risk_score': 'mean',
+                'building_age': 'mean',
+                'damage_factor': 'first',
+                'quality_score': 'mean',
+            }).round(2)
+        
+        structure_analysis.columns = ['Bina_Sayisi', 'Ort_Prim_TL', 'Ort_Risk_Skoru', 
+                                      'Ort_Bina_Yasi', 'Damage_Factor', 'Ort_Kalite']
+        structure_file = f'{self.results_dir}/structure_type_analysis.csv'
+        structure_analysis.to_csv(structure_file, encoding='utf-8-sig')
+        print(f"✅ Yapı tipi analizi kaydedildi: {structure_file}")
+        
+        # =========================================================================
+        # 8. PARAMETRE İSTATİSTİKLERİ
+        # =========================================================================
+        params_list = [
+            'composite_risk_index', 'district_risk_factor', 'building_complexity_score',
+            'fault_combined_risk', 'soil_risk_factor', 'proximity_risk_factor',
+            'distance_to_city_center_km', 'structure_age_interaction', 'mixed_use_factor',
+            'fault_type_risk_factor', 'customer_reliability_factor', 'neighborhood_density_factor'
+        ]
+        
+        params_analysis = pd.DataFrame({
+            'Parametre': params_list,
+            'Ortalama': [
+                features_df[col].mean() if col in features_df.columns else 0
+                for col in params_list
+            ],
+            'Std': [
+                features_df[col].std() if col in features_df.columns else 0
+                for col in params_list
+            ],
+            'Min': [
+                features_df[col].min() if col in features_df.columns else 0
+                for col in params_list
+            ],
+            'Max': [
+                features_df[col].max() if col in features_df.columns else 0
+                for col in params_list
+            ]
+        }).round(4)
+        
+        params_file = f'{self.results_dir}/parameters_statistics.csv'
+        params_analysis.to_csv(params_file, index=False, encoding='utf-8-sig')
+        print(f"✅ Parametre istatistikleri kaydedildi: {params_file}")
+        
+        # =========================================================================
+        # 9. ÖZET RAPOR (TXT - İnsan Okunabilir)
+        # =========================================================================
+        report_file = f'{self.results_dir}/PRICING_REPORT.txt'
+        with open(report_file, 'w', encoding='utf-8') as f:
+            f.write("="*80 + "\n")
+            f.write("DASK+ PARAMETRİK SİGORTA - FİYATLANDIRMA RAPORU\n")
+            f.write("="*80 + "\n\n")
+            
+            f.write(f"Rapor Tarihi: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Sistem Versiyonu: 2.0 (Enhanced Features)\n\n")
+            
+            f.write("1. GENEL BİLGİLER\n")
+            f.write("-" * 80 + "\n")
+            f.write(f"Toplam Bina: {len(features_df):,}\n")
+            f.write(f"Aktif Poliçe: {(features_df['policy_status'] == 'active').sum() if 'policy_status' in features_df.columns else 'N/A':,}\n")
+            f.write(f"Şehir Sayısı: {features_df['city'].nunique() if 'city' in features_df.columns else 'N/A'}\n")
+            f.write(f"İlçe Sayısı: {features_df['district'].nunique() if 'district' in features_df.columns else 'N/A'}\n\n")
+            
+            f.write("2. FİNANSAL ÖZET\n")
+            f.write("-" * 80 + "\n")
+            if 'annual_premium_tl' in features_df.columns:
+                f.write(f"Toplam Yıllık Prim: {features_df['annual_premium_tl'].sum():,.2f} TL\n")
+                f.write(f"Ortalama Yıllık Prim: {features_df['annual_premium_tl'].mean():,.2f} TL\n")
+                f.write(f"Medyan Yıllık Prim: {features_df['annual_premium_tl'].median():,.2f} TL\n")
+                f.write(f"Min Prim: {features_df['annual_premium_tl'].min():,.2f} TL\n")
+                f.write(f"Max Prim: {features_df['annual_premium_tl'].max():,.2f} TL\n")
+            if 'insurance_value_tl' in features_df.columns:
+                f.write(f"Toplam Teminat: {features_df['insurance_value_tl'].sum():,.2f} TL\n\n")
+            
+            f.write("3. RİSK ANALİZİ\n")
+            f.write("-" * 80 + "\n")
+            if 'risk_score' in features_df.columns:
+                f.write(f"Ortalama Risk Skoru: {features_df['risk_score'].mean():.4f}\n")
+                f.write(f"Yüksek Risk Binalar (>0.7): {(features_df['risk_score'] > 0.7).sum():,}\n")
+                f.write(f"Düşük Risk Binalar (<0.3): {(features_df['risk_score'] < 0.3).sum():,}\n")
+            if 'combined_risk_factor' in features_df.columns:
+                f.write(f"Ortalama Risk Faktörü: {features_df['combined_risk_factor'].mean():.2f}x\n\n")
+            
+            f.write("4. PAKET DAĞILIMI\n")
+            f.write("-" * 80 + "\n")
+            if 'package_type' in features_df.columns:
+                for paket, count in features_df['package_type'].value_counts().items():
+                    pct = (count / len(features_df)) * 100
+                    f.write(f"{paket.upper()}: {count:,} bina ({pct:.1f}%)\n")
+                if 'package_upgraded' in features_df.columns:
+                    f.write(f"\nPaket Yükseltme: {features_df['package_upgraded'].sum():,} bina\n\n")
+            
+            f.write("5. MODEL PERFORMANSI\n")
+            f.write("-" * 80 + "\n")
+            if hasattr(self.pricing_model, 'model_metrics') and self.pricing_model.model_metrics:
+                metrics = self.pricing_model.model_metrics
+                f.write(f"R² Score: {metrics.get('test_r2_score', metrics.get('r2_score', 'N/A'))}\n")
+                f.write(f"MAE: {metrics.get('test_mae', metrics.get('mae', 'N/A'))}\n")
+                f.write(f"RMSE: {metrics.get('test_rmse', metrics.get('rmse', 'N/A'))}\n")
+                f.write(f"Feature Count: {metrics.get('features_count', 'N/A')}\n")
+                f.write(f"Eğitim Örnekleri: {metrics.get('training_samples', 'N/A')}\n")
+                f.write(f"Test Örnekleri: {metrics.get('test_samples', 'N/A')}\n\n")
+            
+            f.write("6. YENİ PARAMETRELER (12 ADET)\n")
+            f.write("-" * 80 + "\n")
+            f.write("✅ composite_risk_index - Multi-dimensional ensemble risk\n")
+            f.write("✅ district_risk_factor - İlçe bazlı risk haritası\n")
+            f.write("✅ building_complexity_score - Yapı kompleksliği\n")
+            f.write("✅ fault_combined_risk - Fay tipi × mesafe\n")
+            f.write("✅ soil_risk_factor - Zemin sınıfı riski\n")
+            f.write("✅ proximity_risk_factor - Merkeze yakınlık\n")
+            f.write("✅ distance_to_city_center_km - Geodesic mesafe\n")
+            f.write("✅ structure_age_interaction - Yapı × yaş sinerjisi\n")
+            f.write("✅ mixed_use_factor - Karma kullanım\n")
+            f.write("✅ fault_type_risk_factor - Fay hattı tipi\n")
+            f.write("✅ customer_reliability_factor - Müşteri güvenilirlik\n")
+            f.write("✅ neighborhood_density_factor - Mahalle yoğunluğu\n\n")
+            
+            f.write("="*80 + "\n")
+            f.write("✅ RAPOR TAMAMLANDI\n")
+            f.write("="*80 + "\n")
+        
+        print(f"✅ Özet rapor kaydedildi: {report_file}")
+        
+        print(f"\n📁 Tüm sonuçlar '{self.results_dir}' klasörüne kaydedildi:")
+        print(f"   • dynamic_pricing_results.csv (Ana sonuçlar)")
+        print(f"   • feature_importance_detailed.csv (Feature önem sıralaması)")
+        print(f"   • model_metrics.json (Model performans metrikleri)")
+        print(f"   • summary_statistics.json (Özet istatistikler)")
+        print(f"   • package_analysis.csv (Paket bazlı analiz)")
+        print(f"   • district_risk_analysis.csv (İlçe bazlı risk)")
+        print(f"   • structure_type_analysis.csv (Yapı tipi analizi)")
+        print(f"   • parameters_statistics.csv (Parametre istatistikleri)")
+        print(f"   • PRICING_REPORT.txt (İnsan okunabilir özet)")
+        print(f"   • pricing_dashboard.png (Görsel dashboard)")
+
     
     def run_full_cycle(self):
         """Tüm sistem döngüsünü çalıştır"""

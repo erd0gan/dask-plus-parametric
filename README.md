@@ -22,6 +22,10 @@
 
 - ⚡ **Hızlı Ödeme:** Deprem sonrası 72 saat içinde otomatik ödeme
 - 🤖 **Yapay Zeka:** Machine Learning bazlı risk analizi ve dinamik fiyatlandırma
+  - ✨ **YENİ:** 12 ek parametre ile geliştirilmiş model (40+ features)
+  - Granular konum riski (ilçe/mahalle bazlı)
+  - Spatial intelligence (coğrafi mesafe analizi)
+  - Jeolojik detaylar (zemin sınıfı, fay tipi)
 - 🔗 **Blockchain:** Şeffaf ve değiştirilemez kayıt sistemi
 - 📊 **Gerçek Zamanlı Veri:** Kandilli Rasathanesi canlı deprem verisi
 - 🎯 **Parametrik Tetikleme:** PGA/PGV eşik değerleri ile otomatik ödeme

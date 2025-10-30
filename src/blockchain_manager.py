@@ -241,7 +241,7 @@ class BlockchainManager:
                 latitude=latitude,
                 longitude=longitude,
                 premium=premium,
-                package_type=policy_data.get('package_type', 'standard'),
+                package_type=policy_data.get('package_type', 'Standart'),
                 verbose=False  # Toplu yüklemede verbose kapalı
             )
             
@@ -463,7 +463,7 @@ class BlockchainManager:
                     policy_data = {
                         'customer_id': str(row['customer_id']),
                         'building_id': str(row['building_id']),
-                        'package_type': str(row.get('package_type', 'standard')),
+                        'package_type': str(row.get('package_type', 'Standart')),
                         'max_coverage': int(float(row.get('insurance_value_tl', row.get('max_coverage', 0)))),
                         'annual_premium_tl': float(row.get('annual_premium_tl', 0)),
                         'latitude': float(row['latitude']),
@@ -590,15 +590,15 @@ class BlockchainManager:
                             'annual_premium': float(row.get('annual_premium_tl', 0)),
                             'latitude': float(row['latitude']),
                             'longitude': float(row['longitude']),
-                            'package_type': str(row.get('package_type', 'standard'))
+                            'package_type': str(row.get('package_type', 'Standart'))
                         }
                         
                         # Kategori
                         coverage = policy_data['coverage_amount']
-                        if coverage >= 1000000:
+                        if coverage >= 1500000:
                             category = 'high'
                             stats['high_value'] += 1
-                        elif coverage >= 500000:
+                        elif coverage >= 750000:
                             category = 'medium'
                             stats['medium_value'] += 1
                         else:
@@ -896,7 +896,7 @@ if __name__ == "__main__":
     test_policy = {
         'customer_id': 'CUST000001',
         'building_id': 'BLD_000001',
-        'package_type': 'standard',
+        'package_type': 'Standart',
         'max_coverage': 750_000,
         'annual_premium_tl': 5_132.47,
         'latitude': 41.0181,

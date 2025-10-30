@@ -242,17 +242,74 @@ class RealisticDataGenerator:
             'complete_address': f"{apartment_name} Apartmanı, Kat: {floor}, Daire: {apartment_no}, {street_name} Sokak No: {street_no}, {neighborhood}"
         }
     
-    def calculate_risk_score(self, building_age, distance_to_fault, soil_amp, liq_risk, damage_factor):
-        fault_risk = 1.0 / (1 + distance_to_fault / 30)
-        soil_risk = (soil_amp - 1.0) / 1.5 + liq_risk * 0.5
-        age_risk = min(building_age / 60, 1.0)
-        structure_risk = damage_factor / 1.5
+    def calculate_risk_score(self, building_age, distance_to_fault, soil_amp, liq_risk, damage_factor, 
+                            construction_year=None, floors=None, quality_score=None):
+        """
+        Geliştirilmiş Risk Skoru Hesaplama
+        - Fay riski: Üstel azalma (daha gerçekçi)
+        - Zemin riski: Normalize edilmiş (max 1.0)
+        - Yaş riski: Deprem yönetmeliği bazlı
+        - Yapı riski: Kat sayısı ve kalite ile birleştirilmiş
+        """
+        # 1. FAY HATTI RİSKİ - Üstel azalma (0-1)
+        # 0 km: 1.0, 50 km: 0.37, 100 km: 0.14
+        fault_risk = np.exp(-distance_to_fault / 50)
         
+        # 2. ZEMİN RİSKİ - Normalize edilmiş (0-1)
+        # Amplifikasyon + sıvılaşma riski
+        soil_risk = min(((soil_amp - 1.0) / 1.5) * 0.7 + liq_risk * 0.3, 1.0)
+        
+        # 3. YAŞ VE YÖNETMELİK RİSKİ (0-1)
+        if construction_year is not None:
+            # Türkiye Deprem Yönetmelikleri bazlı
+            if construction_year >= 2018:
+                base_age_risk = 0.1  # Modern yönetmelik
+            elif construction_year >= 2007:
+                base_age_risk = 0.3  # 2007 yönetmeliği
+            elif construction_year >= 1998:
+                base_age_risk = 0.5  # 1998 yönetmeliği
+            elif construction_year >= 1975:
+                base_age_risk = 0.7  # Eski yönetmelik
+            else:
+                base_age_risk = 0.9  # Yönetmelik öncesi
+            
+            # Yaş ile degradasyon ekle (max +0.3)
+            age_degradation = min(building_age / 80, 0.3)
+            age_risk = min(base_age_risk + age_degradation, 1.0)
+        else:
+            # Eski formül (fallback)
+            age_risk = min(building_age / 60, 1.0)
+        
+        # 4. YAPI RİSKİ - Yapı tipi + Kat sayısı + Kalite (0-1)
+        base_structure_risk = damage_factor / 1.5
+        
+        # Kat sayısı riski (yüksek binalar daha riskli)
+        if floors is not None:
+            if floors >= 15:
+                floor_risk = 0.3  # Çok yüksek
+            elif floors >= 8:
+                floor_risk = 0.2  # Yüksek
+            elif floors >= 5:
+                floor_risk = 0.1  # Orta
+            else:
+                floor_risk = 0.0  # Düşük
+        else:
+            floor_risk = 0.0
+        
+        # Kalite düzeltmesi (kaliteli bina = düşük risk)
+        if quality_score is not None:
+            quality_modifier = 1.0 - (quality_score / 10) * 0.3  # Kalite riski azaltır
+        else:
+            quality_modifier = 1.0
+        
+        structure_risk = min((base_structure_risk + floor_risk) * quality_modifier, 1.0)
+        
+        # 5. AĞIRLIKLI TOPLAM
         risk_score = (
-            fault_risk * 0.40 +
-            soil_risk * 0.25 +
-            age_risk * 0.20 +
-            structure_risk * 0.15
+            fault_risk * 0.35 +      # %35 (azaltıldı, çünkü diğerleri güçlendi)
+            soil_risk * 0.25 +       # %25 (aynı)
+            age_risk * 0.25 +        # %25 (artırıldı, yönetmelik çok önemli)
+            structure_risk * 0.15    # %15 (aynı)
         )
         
         return min(max(risk_score, 0.0), 1.0)
@@ -326,25 +383,29 @@ class RealisticDataGenerator:
                 building_age
             )
             
+            # Geliştirilmiş risk score hesaplama (ek parametreler ile)
             risk_score = self.calculate_risk_score(
                 building_age,
                 min_dist,
                 soil_info['amplification'],
                 soil_info['liquefaction_risk'],
-                struct_info['damage_factor']
+                struct_info['damage_factor'],
+                construction_year=construction_year,
+                floors=floors,
+                quality_score=quality_score
             )
             
             if (insurance_value_tl > 3_200_000 and risk_score < 0.30) or (quality_score > 9.2 and building_age < 4):
-                package_type = 'premium'
+                package_type = 'Premium'
                 max_coverage = 1_500_000
                 base_rate = 0.012
             elif (insurance_value_tl >= 1_500_000 and insurance_value_tl <= 3_200_000 and
                   risk_score >= 0.25 and risk_score <= 0.60):
-                package_type = 'standard'
+                package_type = 'Standart'
                 max_coverage = 750_000
                 base_rate = 0.008
             else:
-                package_type = 'temel'
+                package_type = 'Temel'
                 max_coverage = 250_000
                 base_rate = 0.005
             
@@ -353,7 +414,9 @@ class RealisticDataGenerator:
             monthly_premium = annual_premium / 12
             
             policy_status = random.choices(['Aktif', 'Pasif'], weights=[95, 5], k=1)[0]
-            policy_start_date = datetime.now() - timedelta(days=random.randint(0, 365))
+            # Daha gerçekçi tarihler - farklı zaman aralıkları
+            days_ago = random.randint(30, 730)  # 1 ay ile 2 yıl arası
+            policy_start_date = datetime.now() - timedelta(days=days_ago)
             policy_end_date = policy_start_date + timedelta(days=365)
             
             building = {
@@ -449,7 +512,7 @@ class RealisticDataGenerator:
                 'password_aes_encrypted': password_aes,
                 'avatar_url': avatar_url,
                 'status': random.choice(['Aktif', 'Aktif', 'Aktif', 'Pasif']),
-                'registration_date': (datetime.now() - timedelta(days=random.randint(0, 365))).strftime('%Y-%m-%d'),
+                'registration_date': (datetime.now() - timedelta(days=random.randint(30, 730))).strftime('%Y-%m-%d'),
                 'last_login': (datetime.now() - timedelta(days=random.randint(0, 30))).strftime('%Y-%m-%d %H:%M:%S'),
                 'customer_score': random.randint(70, 100)
             })
@@ -905,8 +968,8 @@ def generate_customers(self, n_customers=100):
         # Müşteri durumu
         customer_status = random.choice(['Aktif', 'Aktif', 'Aktif', 'Aktif', 'Aktif', 'Aktif', 'Pasif'])
         
-        # Müşteri oluşturma tarihi
-        registration_date = datetime.now() - timedelta(days=random.randint(0, 365))
+        # Müşteri oluşturma tarihi - daha gerçekçi dağılım (30 gün ile 730 gün arası)
+        registration_date = datetime.now() - timedelta(days=random.randint(30, 730))
         
         # Müşteri başarı puanı
         customer_score = random.randint(70, 100)

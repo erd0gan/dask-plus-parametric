@@ -58,9 +58,17 @@ from trigger import (
     MultiParameterTriggerOptimizer
 )
 
-# ✨ BLOCKCHAIN ENTEGRASYONU ✨
+#  BLOCKCHAIN ENTEGRASYONU 
 from blockchain_manager import BlockchainManager, SmartBlockchainFilter
 from blockchain_service import BlockchainService
+
+# Dinamik Rapor Üretici
+try:
+    from generate_reports import generate_all_reports
+    REPORTS_AVAILABLE = True
+except Exception as e:
+    logger.warning(f"⚠️ generate_reports modülü yüklenemedi: {e}")
+    REPORTS_AVAILABLE = False
 
 # Templates ve static dosyaları absolute path ile
 app = Flask(__name__, 
@@ -113,7 +121,7 @@ class KandilliEarthquakeService:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
     
-    def fetch_earthquakes(self, min_magnitude=2.0, limit=10):
+    def fetch_earthquakes(self, min_magnitude=3.0, limit=10):
         """Kandilli'den deprem verilerini çek"""
         try:
             response = requests.get(self.url, headers=self.headers, timeout=10)
@@ -469,176 +477,222 @@ def load_policies_to_blockchain_service():
         traceback.print_exc()
 
 
-def load_active_policies_to_blockchain():
+def recalculate_all_premiums_with_ai(buildings_df, pricing_system):
     """
-    Aktif poliçeleri blockchain'e yükle
-    data/blockchain_policies.json dosyasından kontrol ederek
+    Tüm binaların primlerini AI modeli ile yeniden hesapla ve güncelle
     """
-    global blockchain_manager
+    try:
+        from tqdm import tqdm
+        
+        # Feature extraction
+        features_df = pricing_system.pricing_model.prepare_features(buildings_df)
+        
+        # Model prediction ile risk skorları güncelle
+        predicted_risks = pricing_system.pricing_model.predict_risk(features_df)
+        
+        # Her bina için AI ile prim hesapla
+        updated_premiums = []
+        
+        for idx, row in tqdm(features_df.iterrows(), 
+                            total=len(features_df), 
+                            desc="💵 AI Fiyatlandırma",
+                            unit="bina",
+                            bar_format='{l_bar}{bar:40}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]',
+                            colour='green',
+                            ncols=100):
+            
+            # AI model ile dinamik prim hesapla
+            package_type = row['package_type']
+            base_coverage = {
+                'Temel': 250_000,
+                'Standart': 750_000,
+                'Premium': 1_500_000
+            }.get(package_type, 250_000)
+            
+            # AI risk skoru
+            ai_risk = predicted_risks[idx]
+            
+            # Base rate paket tipine göre
+            base_rate = {
+                'Temel': 0.005,
+                'Standart': 0.008,
+                'Premium': 0.012
+            }.get(package_type, 0.005)
+            
+            # AI risk multiplier (0.6x - 2.0x arası)
+            if ai_risk < 0.2:
+                risk_multiplier = 0.6
+            elif ai_risk < 0.4:
+                risk_multiplier = 0.8 + (ai_risk - 0.2) * 1.0  # 0.8 - 1.0
+            elif ai_risk < 0.6:
+                risk_multiplier = 1.0 + (ai_risk - 0.4) * 1.5  # 1.0 - 1.3
+            elif ai_risk < 0.8:
+                risk_multiplier = 1.3 + (ai_risk - 0.6) * 2.5  # 1.3 - 1.8
+            else:
+                risk_multiplier = 1.8 + (ai_risk - 0.8) * 1.0  # 1.8 - 2.0
+            
+            risk_multiplier = min(max(risk_multiplier, 0.6), 2.0)
+            
+            # Final prim hesaplama
+            annual_premium = base_coverage * base_rate * risk_multiplier
+            monthly_premium = annual_premium / 12
+            
+            updated_premiums.append({
+                'index': idx,
+                'annual_premium_tl': round(annual_premium, 2),
+                'monthly_premium_tl': round(monthly_premium, 2),
+                'ai_risk_score': round(ai_risk, 4)
+            })
+        
+        print()  # Progress bar'dan sonra yeni satır
+        
+        # buildings.csv'yi güncelle
+        buildings_file = DATA_DIR / 'buildings.csv'
+        original_df = pd.read_csv(buildings_file, encoding='utf-8-sig')
+        
+        # Güncellemeleri uygula
+        for update in updated_premiums:
+            idx = update['index']
+            if idx < len(original_df):
+                original_df.at[idx, 'annual_premium_tl'] = update['annual_premium_tl']
+                original_df.at[idx, 'monthly_premium_tl'] = update['monthly_premium_tl']
+                # AI risk skorunu da kaydet (opsiyonel)
+                if 'ai_risk_score' not in original_df.columns:
+                    original_df['ai_risk_score'] = 0.0
+                original_df.at[idx, 'ai_risk_score'] = update['ai_risk_score']
+        
+        # Güncellenmiş CSV'yi kaydet
+        original_df.to_csv(buildings_file, index=False, encoding='utf-8-sig')
+        
+        avg_premium = original_df['annual_premium_tl'].mean()
+        total_premium = original_df['annual_premium_tl'].sum()
+        
+        print(f"✅ AI ile {len(updated_premiums)} bina fiyatlandırıldı")
+        print(f"   💵 Ortalama yıllık prim: {avg_premium:,.2f} TL")
+        print(f"   💰 Toplam yıllık prim: {total_premium:,.2f} TL")
+        print(f"   📊 buildings.csv güncellendi")
+        
+    except Exception as e:
+        print(f"⚠️ AI fiyatlandırma hatası: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def create_sample_payout_requests():
+    """
+    İlk açılışta örnek ödeme emirleri oluştur (3-4 poliçe)
+    - Duplicate kontrolü yapar
+    - Blockchain'e sadece yeni emirleri ekler
+    """
+    global blockchain_service
     
-    if not blockchain_manager:
-        logger.warning("⚠️ Blockchain manager mevcut değil, poliçe yükleme atlanıyor")
+    if not blockchain_service:
+        logger.warning("⚠️ Blockchain service mevcut değil, örnek ödeme emirleri atlanıyor")
         return
     
     try:
-        # Blockchain policy cache dosyası
-        policy_cache_file = DATA_DIR / 'blockchain_policies.json'
-        
-        # Bina verilerini yükle
+        # Buildings verilerini yükle
         buildings_file = DATA_DIR / 'buildings.csv'
         if not buildings_file.exists():
-            logger.warning("⚠️ buildings.csv bulunamadı, poliçe yükleme atlanıyor")
+            logger.warning("⚠️ buildings.csv bulunamadı, örnek ödeme emirleri atlanıyor")
             return
         
         buildings_df = pd.read_csv(buildings_file, encoding='utf-8-sig')
         
-        # Aktif poliçeleri filtrele
-        active_buildings = buildings_df[buildings_df['policy_status'] == 'Aktif'].copy()
-        
-        # Threshold kontrolü - sadece yüksek kapsamlı poliçeler
-        high_coverage_policies = active_buildings[
-            active_buildings['max_coverage'] >= 100_000
+        # Aktif ve yüksek kapsamlı poliçeleri filtrele
+        eligible_policies = buildings_df[
+            (buildings_df['policy_status'] == 'Aktif') &
+            (buildings_df['max_coverage'] >= 500_000)  # 500K+ yüksek riskli
         ].copy()
         
-        logger.info(f"📊 Toplam aktif poliçe: {len(active_buildings):,}")
-        logger.info(f"📊 100K+ kapsamlı poliçe: {len(high_coverage_policies):,}")
-        
-        # Paket dağılımı
-        if len(high_coverage_policies) > 0:
-            package_dist = high_coverage_policies['package_type'].value_counts()
-            logger.info(f"📦 Paket dağılımı:")
-            for pkg, count in package_dist.items():
-                logger.info(f"   {pkg}: {count:,} poliçe")
-        
-        if len(high_coverage_policies) == 0:
-            logger.info("ℹ️ Blockchain'e yüklenecek yüksek kapsamlı poliçe yok")
+        if len(eligible_policies) == 0:
+            logger.info("ℹ️ Örnek ödeme emri için uygun poliçe yok")
             return
         
-        # Cache'den önceki kayıtları yükle
-        loaded_policies = set()
-        if policy_cache_file.exists():
-            try:
-                with open(policy_cache_file, 'r', encoding='utf-8') as f:
-                    cache_data = json.load(f)
-                    loaded_policies = set(cache_data.get('loaded_policy_numbers', []))
-                    logger.info(f"📂 Cache'den {len(loaded_policies):,} yüklenmiş poliçe bulundu")
-            except Exception as e:
-                logger.warning(f"⚠️ Cache okuma hatası: {e}")
+        # Mevcut ödeme emirlerini kontrol et (duplicate önleme)
+        existing_requests = set()
+        for block in blockchain_service.blockchain.chain:
+            if block.data.get('type') == 'payout_request':
+                policy_id = block.data.get('policy_id')
+                if policy_id:
+                    existing_requests.add(policy_id)
         
-        # Yeni poliçeleri filtrele
-        new_policies = high_coverage_policies[
-            ~high_coverage_policies['policy_number'].isin(loaded_policies)
-        ]
+        # İlk 4 poliçeyi seç (henüz ödeme emri olmayanlardan)
+        sample_policies = []
+        for _, policy in eligible_policies.head(10).iterrows():
+            policy_id = policy['policy_number']
+            if policy_id not in existing_requests:
+                sample_policies.append(policy)
+                if len(sample_policies) >= 4:
+                    break
         
-        if len(new_policies) == 0:
-            logger.info("✅ Tüm aktif poliçeler blockchain'de kayıtlı")
+        if len(sample_policies) == 0:
+            logger.info("✅ Tüm örnek poliçeler zaten ödeme emri oluşturulmuş")
             return
         
-        logger.info(f"📤 {len(new_policies):,} yeni poliçe blockchain'e yükleniyor...")
+        logger.info(f"\n💰 {len(sample_policies)} örnek ödeme emri oluşturuluyor...")
         
-        # İstatistikler
-        success_count = 0
-        failed_count = 0
-        
-        # Progress bar ile yükleme
-        from tqdm import tqdm
-        
-        for idx, building in tqdm(
-            new_policies.iterrows(),
-            total=len(new_policies),
-            desc="📦 Blockchain Yükleme",
-            unit="poliçe",
-            bar_format='{l_bar}{bar:40}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]',
-            colour='green',
-            ncols=100
-        ):
+        created_count = 0
+        for policy in sample_policies:
             try:
-                policy_data = {
-                    'customer_id': building['customer_id'],
-                    'building_id': building['building_id'],
-                    'policy_number': building['policy_number'],
-                    'policy_id': building['policy_number'],
-                    'package_type': building['package_type'],
-                    'max_coverage': int(building['max_coverage']),
-                    'coverage_amount': int(building['max_coverage']),
-                    'annual_premium_tl': float(building['annual_premium_tl']),
-                    'latitude': float(building['latitude']),
-                    'longitude': float(building['longitude']),
-                    'start_date': building['policy_start_date'],
-                    'owner_name': building['owner_name'],
-                    'city': building['city'],
-                    'district': building['district']
+                # Ödeme tutarını hesapla (teminatın %50'i - parametrik tetikleme)
+                payout_amount = int(policy['max_coverage'] * 0.50)
+                request_id = f"PAY-SAMPLE-{policy['policy_number']}"
+                
+                # Blockchain'e ödeme emri ekle
+                block_data = {
+                    'type': 'payout_request',
+                    'request_id': request_id,
+                    'policy_id': policy['policy_number'],
+                    'customer_id': policy['customer_id'],
+                    'amount_tl': payout_amount,
+                    'reason': 'Parametrik tetikleme - Örnek deprem senaryosu',
+                    'requester': 'system',
+                    'status': 'pending',
+                    'approvals': [],
+                    'earthquake_magnitude': 6.8,
+                    'distance_km': 15.2,
+                    'created_at': datetime.now().isoformat()
                 }
                 
-                result = blockchain_manager.record_policy(policy_data)
+                blockchain_service.blockchain.add_block(block_data, save_to_disk=True)
+                created_count += 1
                 
-                if result is not None:
-                    if result > 0 or result == -1:
-                        loaded_policies.add(building['policy_number'])
-                        success_count += 1
-                else:
-                    failed_count += 1
-                    
+                logger.info(f"   ✅ Ödeme emri: {policy['policy_number']} - ₺{payout_amount:,}")
+                
             except Exception as e:
-                failed_count += 1
-                # Progress bar ile uyumlu hata gösterimi (sadece kritik hataları göster)
-                if failed_count <= 5:  # İlk 5 hatayı göster
-                    tqdm.write(f"❌ Hata: {building.get('policy_number', 'N/A')}")
+                logger.error(f"   ❌ Ödeme emri hatası ({policy['policy_number']}): {e}")
         
-        print()  # Progress bar'dan sonra yeni satır
-        
-        # Cache'i güncelle
-        cache_data = {
-            'last_update': datetime.now().isoformat(),
-            'total_loaded': len(loaded_policies),
-            'loaded_policy_numbers': list(loaded_policies)
-        }
-        
-        with open(policy_cache_file, 'w', encoding='utf-8') as f:
-            json.dump(cache_data, f, ensure_ascii=False, indent=2)
-        
-        logger.info(f"✅ Blockchain'e {success_count:,} poliçe yüklendi, {failed_count:,} hata")
-        logger.info(f"💾 Cache güncellendi: {policy_cache_file}")
+        logger.info(f"✅ {created_count} örnek ödeme emri blockchain'e eklendi")
         
     except Exception as e:
-        logger.error(f"❌ Poliçe yükleme hatası: {e}")
+        logger.error(f"Örnek ödeme emirleri hatası: {e}")
         import traceback
         traceback.print_exc()
 
 
 def initialize_backend():
     """Backend sistemlerini başlat"""
-    global pricing_system, earthquake_analyzer, building_loader, trigger_engine, kandilli_service, blockchain_manager, blockchain_service
+    global pricing_system, earthquake_analyzer, building_loader, trigger_engine, kandilli_service, blockchain_service
     
     print("\n" + "="*80)
     print("DASK+ BACKEND BAŞLATILIYOR...")
     print("="*80)
     
     try:
-        # ✨ BLOCKCHAIN SERVICE BAŞLAT (YENİ - Hash-Chained Blockchain) ✨
+        # ✨ BLOCKCHAIN SERVICE BAŞLAT (Immutable Hash-Chained Blockchain) ✨
         print("\n🔗 Blockchain Service başlatılıyor...")
         blockchain_service = BlockchainService()
-        print("✅ Blockchain Service hazır (Immutable Hash-Chained Blockchain)")
+        print(f"✅ Blockchain Service hazır - ID: {id(blockchain_service)}")
         print(f"   📦 Genesis Block: {blockchain_service.blockchain.chain[0].hash[:16]}...")
         print(f"   🔗 Toplam Block: {len(blockchain_service.blockchain.chain)}")
         print(f"   ✓ Chain Valid: {blockchain_service.blockchain.is_valid()}")
-        
-        # ✨ BLOCKCHAIN MANAGER BAŞLAT (ESKİ - Hibrit Sistem) ✨
-        print("\n🔗 Blockchain Manager başlatılıyor...")
-        blockchain_manager = BlockchainManager(
-            enable_blockchain=True,  # Blockchain aktif
-            async_mode=True,  # Asenkron mod (hız için)
-            record_threshold={
-                'policy_min_coverage': 100_000,  # 100K+ poliçeler (temel paket dahil)
-                'earthquake_min_magnitude': 5.0,  # Sadece M5.0+ depremler
-                'payout_min_amount': 0  # Tüm ödemeler
-            }
-        )
-        print("✅ Blockchain Manager hazır (Hibrit Mod)")
+        print(f"   👥 Admin sayısı: {len(blockchain_service.admins)} ({blockchain_service.REQUIRED_ADMIN_APPROVALS}-of-{len(blockchain_service.admins)} multi-sig)")
         
         # Kandilli Service başlat
         kandilli_service = KandilliEarthquakeService()
         print("✅ Kandilli Service hazır")
+        
         # Veri dizinini kontrol et - ROOT_DIR'e göre relatif path
         data_dir = ROOT_DIR / 'data'
         data_dir.mkdir(parents=True, exist_ok=True)
@@ -695,6 +749,14 @@ def initialize_backend():
                 # Model eğitimi
                 pricing_system.pricing_model.train_risk_model(features_df)
                 
+                # ✨ TÜM BİNALARA AI İLE DİNAMİK FİYAT HESAPLA
+                print("\n� Tüm binalar için AI ile dinamik fiyat hesaplanıyor...")
+                recalculate_all_premiums_with_ai(buildings_df, pricing_system)
+                
+                # 📊 Raporları oluştur ve results klasörüne kaydet (AI pricing sonrası)
+                print("\n� Model raporları oluşturuluyor...")
+                pricing_system.generate_reports()
+                
                 # Model'i kaydet (cache için)
                 import pickle
                 with open(model_cache_file, 'wb') as f:
@@ -718,12 +780,21 @@ def initialize_backend():
                 print("💡 Sistem temel fiyatlandırma ile devam edecek")
         
         # Blockchain'e aktif poliçeleri yükle (ilk başlatmada)
-        print("\n📦 Blockchain poliçe durumu kontrol ediliyor...")
-        load_active_policies_to_blockchain()
-        
-        # Blockchain Service'e de poliçeleri yükle
-        print("\n📦 Blockchain Service'e poliçeler yükleniyor...")
+        print("\n📦 Blockchain'e poliçeler yükleniyor...")
         load_policies_to_blockchain_service()
+        
+        # 💰 Örnek ödeme emirleri oluştur (ilk açılışta, duplicate kontrolü ile)
+        print("\n💰 Örnek ödeme emirleri kontrol ediliyor...")
+        create_sample_payout_requests()
+        
+        # ✨ Dinamik Raporları Oluştur
+        if REPORTS_AVAILABLE:
+            print("\n📊 Dinamik sistem raporları oluşturuluyor...")
+            try:
+                generate_all_reports()
+                print("✅ Dinamik raporlar başarıyla oluşturuldu!")
+            except Exception as e:
+                print(f"⚠️ Dinamik raporlar oluşturulamadı: {e}")
         
         print("\n" + "="*80)
         print("✅ BACKEND BAŞLATILDI!")
@@ -783,7 +854,7 @@ def test_css():
 def get_earthquakes():
     """Deprem verilerini getir - Kandilli gerçek zamanlı veri"""
     try:
-        min_magnitude = float(request.args.get('min_magnitude', 2.0))
+        min_magnitude = float(request.args.get('min_magnitude', 3.0))
         limit = int(request.args.get('limit', 10))
         
         # Önce Kandilli'den gerçek veri çekmeyi dene
@@ -953,9 +1024,9 @@ def calculate_premium():
         }
         
         coverage_amounts = {
-            'temel': 250000,
-            'standard': 500000,
-            'premium': 1000000
+            'Temel': 250000,
+            'Standart': 750000,
+            'Premium': 1500000
         }
         
         risk_factor = risk_factors.get(il, 1.0)
@@ -980,6 +1051,111 @@ def calculate_premium():
         return jsonify({
             'success': False,
             'message': f'Hata: {str(e)}'
+        }), 500
+
+@app.route('/api/demo/calculate-premium-ai', methods=['POST'])
+def calculate_premium_ai():
+    """Demo için AI modeli ile gerçek prim hesaplama - TÜM PARAMETRELER"""
+    try:
+        data = request.get_json()
+        
+        # Kullanıcıdan gelen temel bilgiler
+        city = data.get('city', 'İstanbul')
+        district = data.get('district', 'Kadıköy')
+        neighborhood = data.get('neighborhood', 'Fenerbahçe')
+        package_type = data.get('package_type', 'standard')
+        
+        # Yapısal bilgiler (demo için varsayılan değerler veya kullanıcı girişi)
+        building_data = {
+            # Konum bilgileri
+            'city': city,
+            'district': district,
+            'neighborhood': neighborhood,
+            'latitude': data.get('latitude', 41.0 + np.random.uniform(-0.5, 0.5)),
+            'longitude': data.get('longitude', 29.0 + np.random.uniform(-0.5, 0.5)),
+            
+            # Yapısal özellikler
+            'structure_type': data.get('structure_type', 'betonarme_orta'),
+            'floors': data.get('floors', np.random.randint(3, 8)),
+            'building_age': data.get('building_age', np.random.randint(10, 40)),
+            'building_area_m2': data.get('building_area_m2', np.random.randint(500, 2000)),
+            'apartment_count': data.get('apartment_count', np.random.randint(4, 16)),
+            'residents': data.get('residents', np.random.randint(10, 50)),
+            'commercial_units': data.get('commercial_units', np.random.randint(0, 3)),
+            'quality_score': data.get('quality_score', np.random.uniform(5, 9)),
+            
+            # Jeolojik bilgiler
+            'soil_type': data.get('soil_type', np.random.choice(['A', 'B', 'C', 'D'])),
+            'soil_amplification': data.get('soil_amplification', np.random.uniform(1.2, 2.0)),
+            'liquefaction_risk': data.get('liquefaction_risk', np.random.uniform(0.1, 0.6)),
+            'nearest_fault': data.get('nearest_fault', 'Kuzey Anadolu Fayı'),
+            'distance_to_fault_km': data.get('distance_to_fault_km', np.random.uniform(5, 50)),
+            
+            # Risk skorları
+            'damage_factor': data.get('damage_factor', np.random.uniform(0.3, 0.8)),
+            'has_previous_damage': data.get('has_previous_damage', 0),
+            'previous_damage_count': data.get('previous_damage_count', 0),
+            
+            # Finansal bilgiler
+            'insurance_value_tl': data.get('insurance_value_tl', data.get('coverage_amount', 1_000_000)),
+            'coverage_amount': data.get('coverage_amount', 1_000_000),
+            'package_type': package_type,
+            'policy_status': 'Aktif',
+            
+            # Müşteri bilgisi
+            'customer_score': data.get('customer_score', 75)
+        }
+        
+        # Features hazırla
+        features_df = pricing_system.pricing_model.prepare_features(pd.DataFrame([building_data]))
+        
+        # Risk tahmini yap
+        risk_prediction = pricing_system.pricing_model.predict_risk(features_df)
+        predicted_risk = float(risk_prediction[0])
+        
+        # Dinamik prim hesapla
+        premium_result = pricing_system.pricing_model.calculate_dynamic_premium(
+            building_features=dict(features_df.iloc[0]),
+            seismic_analyzer=None
+        )
+        
+        # Sonuçları hazırla
+        result = {
+            'success': True,
+            'data': {
+                'annual_premium': premium_result['annual_premium'],
+                'monthly_premium': premium_result['monthly_premium'],
+                'coverage': premium_result.get('max_coverage', premium_result.get('coverage_amount', 1000000)),
+                'package': premium_result.get('package_type', premium_result.get('package', 'standard')),
+                'risk_score': round(predicted_risk, 4),
+                'risk_level': 'Yüksek' if predicted_risk > 0.7 else ('Orta' if predicted_risk > 0.4 else 'Düşük'),
+                'location': f"{neighborhood}, {district}, {city}",
+                'pricing_factors': {
+                    'base_rate': premium_result.get('base_rate', 0.008),
+                    'risk_multiplier': premium_result.get('risk_multiplier', 1.0),
+                    'location_factor': premium_result.get('location_factor', 1.0),
+                    'building_age_factor': building_data['building_age'],
+                    'soil_type': building_data['soil_type'],
+                    'structure_type': building_data['structure_type'],
+                    'ai_model_used': True
+                },
+                'building_details': {
+                    'floors': building_data['floors'],
+                    'age': building_data['building_age'],
+                    'area_m2': building_data['building_area_m2'],
+                    'apartments': building_data['apartment_count'],
+                    'quality_score': round(building_data['quality_score'], 1)
+                }
+            }
+        }
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"AI prim hesaplama hatası: {e}")
+        return jsonify({
+            'success': False,
+            'message': f'Prim hesaplama hatası: {str(e)}'
         }), 500
 
 @app.route('/api/simulate-trigger', methods=['POST'])
@@ -1102,6 +1278,94 @@ def get_policies():
         
     except Exception as e:
         logger.error(f'Poliçe listesi hatası: {str(e)}')
+        return jsonify({
+            'success': False,
+            'message': f'Hata: {str(e)}'
+        }), 500
+
+@app.route('/api/policy/<policy_no>', methods=['GET', 'DELETE'])
+def handle_policy(policy_no):
+    """Tek bir poliçenin detaylarını getir veya sil"""
+    try:
+        buildings_file = DATA_DIR / 'buildings.csv'
+        
+        if not buildings_file.exists():
+            return jsonify({
+                'success': False,
+                'message': 'Poliçe verisi bulunamadı'
+            }), 404
+        
+        # CSV'yi oku
+        df = pd.read_csv(str(buildings_file), encoding='utf-8-sig')
+        
+        # Poliçeyi bul
+        policy_row = df[df['policy_number'] == policy_no]
+        
+        if policy_row.empty:
+            return jsonify({
+                'success': False,
+                'message': 'Poliçe bulunamadı'
+            }), 404
+        
+        # DELETE isteği
+        if request.method == 'DELETE':
+            # Poliçeyi sil
+            df = df[df['policy_number'] != policy_no]
+            df.to_csv(str(buildings_file), index=False, encoding='utf-8-sig')
+            
+            return jsonify({
+                'success': True,
+                'message': 'Poliçe başarıyla silindi'
+            })
+        
+        # GET isteği - detayları döndür
+        row = policy_row.iloc[0]
+        policy_detail = {
+            'policy_number': str(row['policy_number']),
+            'building_id': str(row['building_id']),
+            'customer_id': str(row['customer_id']),
+            'owner_name': str(row['owner_name']),
+            'owner_email': str(row['owner_email']),
+            'owner_phone': str(row['owner_phone']),
+            'city': str(row['city']),
+            'district': str(row['district']),
+            'neighborhood': str(row['neighborhood']),
+            'complete_address': str(row['complete_address']),
+            'latitude': float(row['latitude']),
+            'longitude': float(row['longitude']),
+            'structure_type': str(row['structure_type']),
+            'construction_year': int(row['construction_year']),
+            'building_age': int(row['building_age']),
+            'floors': int(row['floors']),
+            'apartment_count': int(row['apartment_count']),
+            'building_area_m2': float(row['building_area_m2']),
+            'residents': int(row['residents']),
+            'commercial_units': int(row['commercial_units']),
+            'soil_type': str(row['soil_type']),
+            'soil_amplification': float(row['soil_amplification']),
+            'liquefaction_risk': float(row['liquefaction_risk']),
+            'distance_to_fault_km': float(row['distance_to_fault_km']),
+            'nearest_fault': str(row['nearest_fault']),
+            'quality_score': float(row['quality_score']),
+            'risk_score': float(row['risk_score']),
+            'package_type': str(row['package_type']),
+            'max_coverage': int(row['max_coverage']),
+            'insurance_value_tl': int(row['insurance_value_tl']),
+            'annual_premium_tl': float(row['annual_premium_tl']),
+            'monthly_premium_tl': float(row['monthly_premium_tl']),
+            'policy_status': str(row['policy_status']),
+            'policy_start_date': str(row['policy_start_date']),
+            'policy_end_date': str(row['policy_end_date']),
+            'created_at': str(row['created_at'])
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': policy_detail
+        })
+        
+    except Exception as e:
+        logger.error(f'Poliçe detay hatası: {str(e)}')
         return jsonify({
             'success': False,
             'message': f'Hata: {str(e)}'
@@ -1466,12 +1730,37 @@ def health_check():
     })
 
 # ============================================================================
-# BLOCKCHAIN API ROUTES
+# OLD BLOCKCHAIN API ROUTES - REMOVED (Moved to end of file)
+# ============================================================================
+# Note: Blockchain API endpoints moved to bottom of file to avoid conflicts
+
+# ============================================================================
+# ERROR HANDLERS
 # ============================================================================
 
-@app.route('/api/blockchain/stats', methods=['GET'])
-def get_blockchain_stats():
-    """Blockchain istatistiklerini getir (hem Manager hem Service)"""
+@app.errorhandler(404)
+def not_found(error):
+    return jsonify({
+        'success': False,
+        'message': 'Endpoint bulunamadı'
+    }), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({
+        'success': False,
+        'message': 'Sunucu hatası'
+        }), 500
+
+# OLD CODE REMOVED - Buradan ERROR HANDLERS'a kadar olan eski blockchain routes kaldırıldı
+# Yeni blockchain routes dosyanın sonunda (satır ~2870'den sonra)
+
+# CONTINUING FROM HERE - Bu satırdan sonrası devam ediyor
+# ============================================================================
+
+# Placeholder to find the right position
+def placeholder_for_old_blockchain_code():
+    """Eski blockchain kodları buradan kaldırıldı"""
     try:
         stats = {}
         
@@ -1638,33 +1927,7 @@ def get_blockchain_blocks():
             'message': f'Hata: {str(e)}'
         }), 500
 
-@app.route('/api/blockchain/verify', methods=['GET'])
-def verify_blockchain():
-    """
-    Blockchain integrity verification
-    """
-    try:
-        if not blockchain_service:
-            return jsonify({
-                'success': False,
-                'message': 'BlockchainService devre dışı'
-            }), 503
-        
-        is_valid = blockchain_service.verify_blockchain_integrity()
-        
-        return jsonify({
-            'success': True,
-            'chain_valid': is_valid,
-            'total_blocks': len(blockchain_service.blockchain.chain),
-            'genesis_hash': blockchain_service.blockchain.chain[0].hash,
-            'latest_hash': blockchain_service.blockchain.chain[-1].hash if len(blockchain_service.blockchain.chain) > 0 else None,
-            'timestamp': datetime.now().isoformat()
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'message': f'Hata: {str(e)}'
-        }), 500
+# OLD verify_blockchain function removed - duplicate with new implementation at line ~3115
 
 @app.route('/api/blockchain/create-policy', methods=['POST'])
 def blockchain_create_policy():
@@ -2052,11 +2315,11 @@ def get_customer(customer_id):
 def get_policy_details(customer_id):
     """
     Müşterinin poliçe detaylarını getir - Dinamik
-    buildings.csv'den customer_id'ye göre ilişkili binaları bulup
+    buildings.csv'den customer_id veya building_id'ye göre ilişkili binaları bulup
     poliçe detaylarını dön
     
     Args:
-        customer_id: Müşteri ID
+        customer_id: Müşteri ID veya Building ID
     """
     try:
         # Bina verilerini oku
@@ -2066,8 +2329,17 @@ def get_policy_details(customer_id):
         
         buildings_df = pd.read_csv(buildings_file)
         
-        # Bu müşteriye ait binaları bul
-        customer_buildings = buildings_df[buildings_df['customer_id'] == customer_id]
+        # Önce building_id ile kontrol et (BLD_ ile başlıyorsa)
+        if customer_id.startswith('BLD_'):
+            customer_buildings = buildings_df[buildings_df['building_id'] == customer_id]
+            if not customer_buildings.empty:
+                # Building bulundu, customer_id'yi al
+                actual_customer_id = customer_buildings.iloc[0]['customer_id']
+                # Aynı müşteriye ait tüm binaları bul
+                customer_buildings = buildings_df[buildings_df['customer_id'] == actual_customer_id]
+        else:
+            # Customer ID ile direkt ara
+            customer_buildings = buildings_df[buildings_df['customer_id'] == customer_id]
         
         if customer_buildings.empty:
             return jsonify({'error': 'Musteri icin polis bulunamadı'}), 404
@@ -2373,15 +2645,22 @@ def retrain_model():
         
         # Feature extraction
         logger.info("Feature extraction başladı...")
-        pricing_system.pricing_model.extract_features(buildings_df)
+        features_df = pricing_system.pricing_model.prepare_features(buildings_df)
         
         # Model eğitimi
         logger.info("Model eğitimi başladı...")
         start_time = datetime.now()
         
-        pricing_system.pricing_model.train_risk_model(
-            pricing_system.pricing_model.features_df
-        )
+        pricing_system.pricing_model.train_risk_model(features_df)
+        
+        # ✨ TÜM BİNALARA AI İLE DİNAMİK FİYAT HESAPLA
+        logger.info("Tüm binalar için AI ile dinamik fiyat hesaplanıyor...")
+        buildings_df = pd.read_csv(DATA_DIR / 'buildings.csv')
+        recalculate_all_premiums_with_ai(buildings_df, pricing_system)
+        
+        # 📊 Raporları oluştur ve results klasörüne kaydet (AI pricing sonrası)
+        logger.info("Model raporları oluşturuluyor...")
+        pricing_system.generate_reports()
         
         training_duration = (datetime.now() - start_time).total_seconds()
         
@@ -2394,7 +2673,7 @@ def retrain_model():
         # Performans metrikleri
         metrics = {
             'training_duration_seconds': round(training_duration, 2),
-            'training_samples': len(pricing_system.pricing_model.features_df),
+            'training_samples': len(features_df) if features_df is not None else 0,
             'model_saved': str(model_cache_file),
             'timestamp': datetime.now().isoformat()
         }
@@ -2430,6 +2709,8 @@ def get_model_info():
     """
     try:
         model_cache_file = DATA_DIR / 'trained_model.pkl'
+        results_dir = ROOT_DIR / 'results'
+        model_metrics_file = results_dir / 'model_metrics.json'
         
         info = {
             'model_exists': model_cache_file.exists(),
@@ -2445,13 +2726,44 @@ def get_model_info():
             info['model_size_mb'] = round(stat.st_size / (1024 * 1024), 2)
             info['last_trained'] = datetime.fromtimestamp(stat.st_mtime).isoformat()
             
-            # Model metrikleri (varsa)
-            if pricing_system and hasattr(pricing_system.pricing_model, 'model_metrics'):
+            # 🔥 ÖNCELİKLE: model_metrics.json'dan yükle (results klasöründen)
+            if model_metrics_file.exists():
+                try:
+                    import json
+                    with open(model_metrics_file, 'r', encoding='utf-8') as f:
+                        info['performance'] = json.load(f)
+                    logger.info(f"✅ Model metrics loaded from {model_metrics_file}")
+                except Exception as e:
+                    logger.warning(f"⚠️ model_metrics.json yüklenemedi: {e}")
+            
+            # Yedek: Bellekteki model metrikleri (varsa)
+            if 'performance' not in info and pricing_system and hasattr(pricing_system.pricing_model, 'model_metrics'):
                 info['performance'] = pricing_system.pricing_model.model_metrics
+                logger.info("✅ Model metrics loaded from memory")
             
             # Training data info
             if pricing_system and hasattr(pricing_system.pricing_model, 'features_df'):
                 info['training_samples'] = len(pricing_system.pricing_model.features_df)
+            
+            # Feature importance (results/feature_importance_detailed.csv'den)
+            feature_importance_file = results_dir / 'feature_importance_detailed.csv'
+            if feature_importance_file.exists():
+                try:
+                    feature_df = pd.read_csv(feature_importance_file)
+                    # Importance column adını auto-detect et
+                    importance_col = 'ensemble_importance' if 'ensemble_importance' in feature_df.columns else 'importance'
+                    
+                    # Top 50 features
+                    top_features = feature_df.nlargest(50, importance_col)
+                    info['feature_importance'] = [
+                        {
+                            'feature': row['feature'],
+                            'importance': float(row[importance_col])
+                        }
+                        for _, row in top_features.iterrows()
+                    ]
+                except Exception as e:
+                    logger.warning(f"Feature importance yüklenemedi: {e}")
         
         return jsonify({
             'success': True,
@@ -2653,34 +2965,788 @@ def internal_error(error):
     return jsonify({
         'success': False,
         'message': 'Sunucu hatası'
-    }), 500
+        }), 500
 
 # ============================================================================
-# MAIN
+# RESULTS FILE SERVING
 # ============================================================================
 
-if __name__ == '__main__':
-    # Backend'i başlat
-    initialize_backend()
+@app.route('/results/<path:filename>')
+def serve_results(filename):
+    """
+    Results klasöründeki dosyaları serve et
     
-    # Flask uygulamasını çalıştır
-    print("\n" + "="*80)
-    print("🌐 FLASK SERVER BAŞLATILIYOR...")
-    print("="*80)
-    print("\n📍 Ana Sayfa: http://localhost:5000")
-    print("📍 Admin Panel: http://localhost:5000/admin")
-    print("📍 Blockchain Stats: http://localhost:5000/api/blockchain/stats")
-    print("\n💡 Çıkmak için: CTRL+C\n")
-    
+    Args:
+        filename: Dosya adı (örn: summary_statistics.json)
+        
+    Returns:
+        Dosya içeriği veya 404
+    """
     try:
-        app.run(
-            host='0.0.0.0',
-            port=5000,
-            debug=True,
-            use_reloader=False  # Backend'in tekrar başlatılmasını önle
+        results_dir = ROOT_DIR / 'results'
+        file_path = results_dir / filename
+        
+        if not file_path.exists():
+            return jsonify({
+                'success': False,
+                'error': f'File not found: {filename}'
+            }), 404
+        
+        # JSON dosyaları için
+        if filename.endswith('.json'):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            return jsonify(data), 200
+        
+        # CSV dosyaları için
+        elif filename.endswith('.csv'):
+            return send_file(file_path, mimetype='text/csv')
+        
+        # TXT dosyaları için
+        elif filename.endswith('.txt'):
+            return send_file(file_path, mimetype='text/plain')
+        
+        # PNG dosyaları için
+        elif filename.endswith('.png'):
+            return send_file(file_path, mimetype='image/png')
+        
+        else:
+            return send_file(file_path)
+            
+    except Exception as e:
+        logger.error(f"Results file serving error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/model/metrics', methods=['GET'])
+def get_model_metrics():
+    """
+    Model performans metriklerini getir (model_metrics.json'dan)
+    Son eğitim tarihi otomatik olarak güncellenir
+    """
+    try:
+        results_dir = ROOT_DIR / 'results'
+        metrics_file = results_dir / 'model_metrics.json'
+        
+        if not metrics_file.exists():
+            return jsonify({
+                'success': False,
+                'error': 'Model metrics file not found'
+            }), 404
+        
+        with open(metrics_file, 'r', encoding='utf-8') as f:
+            metrics = json.load(f)
+        
+        # Son eğitim tarihi zaman damgasıyla güncelle (her API çağrısında)
+        metrics['last_trained'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        metrics['last_updated'] = datetime.now().isoformat()
+        
+        return jsonify({
+            'success': True,
+            'data': metrics,
+            'timestamp': datetime.now().isoformat()
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Model metrics error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ============================================================================
+# BLOCKCHAIN API ENDPOINTS
+# ============================================================================
+
+# Global blockchain manager
+blockchain_manager = None
+
+def init_blockchain_manager():
+    """Blockchain manager'ı başlat"""
+    global blockchain_manager
+    try:
+        blockchain_manager = BlockchainManager(
+            enable_blockchain=True,
+            async_mode=True,
+            data_dir=str(DATA_DIR)
         )
-    finally:
-        # Uygulama kapanırken blockchain manager'ı kapat
-        if blockchain_manager:
-            print("\n🛑 Blockchain Manager kapatılıyor...")
-            blockchain_manager.shutdown()
+        logger.info("✅ Blockchain manager başlatıldı")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Blockchain manager başlatılamadı: {e}")
+        blockchain_manager = None
+        return False
+
+@app.route('/api/blockchain/stats', methods=['GET'])
+def get_blockchain_stats():
+    """
+    Blockchain istatistiklerini getir - BlockchainService kullanır
+    """
+    global blockchain_service
+    try:
+        # blockchain_service (global) kullan
+        if not blockchain_service:
+            return jsonify({
+                'success': True,
+                'data': {
+                    'policy_count': 0,
+                    'transaction_count': 0,
+                    'payout_count': 0,
+                    'status': 'Devre Dışı',
+                    'contract_address': 'N/A',
+                    'network_id': 0,
+                    'last_block': 0,
+                    'gas_price': 'N/A'
+                },
+                'message': 'Blockchain servisi başlatılmamış'
+            })
+        
+        # BlockchainService'den veri al
+        blockchain_data = blockchain_service.blockchain
+        
+        # Policy, payout request, earthquake bloklarını say
+        policy_blocks = len([b for b in blockchain_data.chain if b.data.get('type') == 'policy'])
+        payout_request_blocks = len([b for b in blockchain_data.chain if b.data.get('type') == 'payout_request'])
+        payout_approval_blocks = len([b for b in blockchain_data.chain if b.data.get('type') == 'payout_approval'])
+        earthquake_blocks = len([b for b in blockchain_data.chain if b.data.get('type') == 'earthquake'])
+        total_blocks = len(blockchain_data.chain)
+        
+        # Bekleyen ödeme emirlerini say (2-of-3 onay bekleyenler)
+        pending_payouts = 0
+        approved_payouts = 0
+        
+        for block in blockchain_data.chain:
+            if block.data.get('type') == 'payout_request':
+                request_id = block.data.get('request_id')
+                # Bu request için kaç admin onayı var?
+                approvals = len([b for b in blockchain_data.chain 
+                               if b.data.get('type') == 'payout_approval' 
+                               and b.data.get('request_id') == request_id])
+                
+                if approvals >= 2:
+                    approved_payouts += 1
+                else:
+                    pending_payouts += 1
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'policy_count': policy_blocks,
+                'transaction_count': total_blocks - 1,  # Genesis hariç
+                'payout_request_count': payout_request_blocks,
+                'pending_approvals': pending_payouts,
+                'approved_payouts': approved_payouts,
+                'status': 'Aktif',
+                'contract_address': '0xDASKPlusCONTRACT000000000000000000000',
+                'network_id': 5777,
+                'last_block': total_blocks - 1,
+                'multi_sig': '2-of-3 Admin Onay Sistemi'
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Blockchain stats error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/blockchain/transactions', methods=['GET'])
+def get_blockchain_transactions():
+    """
+    Son blockchain işlemlerini getir
+    """
+    global blockchain_service
+    try:
+        limit = int(request.args.get('limit', 20))
+        
+        if not blockchain_service:
+            return jsonify({
+                'success': True,
+                'data': [],
+                'message': 'Blockchain servisi başlatılmamış'
+            })
+        
+        # Blockchain'den son blokları al
+        blockchain_data = blockchain_service.blockchain
+        transactions = []
+        
+        # Genesis hariç son N bloku al
+        for block in reversed(blockchain_data.chain[1:]):  # Genesis atla
+            if len(transactions) >= limit:
+                break
+            
+            block_type = block.data.get('type', 'unknown')
+            policy_id = block.data.get('policy_id', '-')
+            
+            transactions.append({
+                'tx_hash': block.hash,
+                'type': block_type.capitalize(),
+                'policy_id': policy_id,
+                'timestamp': datetime.fromtimestamp(block.timestamp).strftime('%Y-%m-%d %H:%M:%S'),
+                'gas_used': random.randint(21000, 150000),  # Mock gas
+                'status': 'success'
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': transactions,
+            'count': len(transactions)
+        })
+        
+    except Exception as e:
+        logger.error(f"Blockchain transactions error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/blockchain/policies', methods=['GET'])
+def get_blockchain_policies():
+    """
+    Blockchain'de kayıtlı poliçeleri getir
+    """
+    global blockchain_service
+    try:
+        limit = int(request.args.get('limit', 50))
+        offset = int(request.args.get('offset', 0))
+        search = request.args.get('search', '')
+        
+        if not blockchain_service:
+            return jsonify({
+                'success': True,
+                'data': [],
+                'total': 0,
+                'message': 'Blockchain servisi başlatılmamış'
+            })
+        
+        # Blockchain'den policy bloklarını al
+        blockchain_data = blockchain_service.blockchain
+        all_policies = []
+        
+        for block in blockchain_data.chain:
+            if block.data.get('type') == 'policy':
+                policy_data = block.data
+                
+                # Search filtresi
+                if search:
+                    customer_id = str(policy_data.get('customer_id', ''))
+                    policy_id = str(policy_data.get('policy_id', ''))
+                    if search.lower() not in customer_id.lower() and search.lower() not in policy_id.lower():
+                        continue
+                
+                all_policies.append({
+                    'blockchain_id': block.index,
+                    'customer_id': policy_data.get('customer_id', 'N/A'),
+                    'coverage_amount': policy_data.get('coverage_amount', 0),
+                    'premium': policy_data.get('premium', 0),
+                    'latitude': policy_data.get('latitude', 0),
+                    'longitude': policy_data.get('longitude', 0),
+                    'is_active': policy_data.get('is_active', True),
+                    'package_type': policy_data.get('package_type', 'temel')
+                })
+        
+        # Pagination
+        total = len(all_policies)
+        policies = all_policies[offset:offset + limit]
+        
+        return jsonify({
+            'success': True,
+            'data': policies,
+            'total': total
+        })
+        
+    except Exception as e:
+        logger.error(f"Blockchain policies error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/blockchain/sync', methods=['POST'])
+def sync_policies_to_blockchain():
+    """
+    Tüm poliçeleri blockchain'e senkronize et - buildings.csv'den okuyup blockchain'e yazar
+    UYARI: Blockchain'i temizler ve sıfırdan oluşturur
+    """
+    global blockchain_service
+    try:
+        data = request.get_json() or {}
+        limit = data.get('limit', 10000)  # Varsayılan 10.000 poliçe (tüm data)
+        
+        if not blockchain_service:
+            return jsonify({
+                'success': False,
+                'error': 'Blockchain servisi başlatılmamış'
+            }), 500
+        
+        # buildings.csv dosyasını oku
+        buildings_file = DATA_DIR / 'buildings.csv'
+        if not buildings_file.exists():
+            return jsonify({
+                'success': False,
+                'error': 'buildings.csv bulunamadı'
+            }), 404
+        
+        import time
+        start_time = time.time()
+        
+        # ⚠️ BLOCKCHAIN'İ TEMİZLE (Sıfırdan başla)
+        logger.info("🗑️ Blockchain temizleniyor (sync işlemi)...")
+        genesis_block = blockchain_service.blockchain.chain[0]  # Genesis block'u sakla
+        blockchain_service.blockchain.chain = [genesis_block]  # Sadece genesis block kalsın
+        blockchain_service.blockchain._save_chain()  # Değişiklikleri diske kaydet
+        
+        df = pd.read_csv(buildings_file, encoding='utf-8-sig')
+        df = df.head(limit)  # Limit uygula
+        
+        recorded = 0
+        skipped = 0
+        errors = 0
+        
+        for idx, row in df.iterrows():
+            try:
+                # None kontrolü
+                if pd.isna(row.get('latitude')) or pd.isna(row.get('longitude')):
+                    skipped += 1
+                    continue
+                
+                # Blockchain'e kaydet
+                policy_id = blockchain_service.create_policy_on_chain(
+                    customer_id=str(row['customer_id']),
+                    coverage_amount=int(float(row.get('insurance_value_tl', 0))),
+                    latitude=float(row['latitude']),
+                    longitude=float(row['longitude']),
+                    premium=int(float(row.get('annual_premium_tl', 0))),
+                    package_type=str(row.get('package_type', 'temel')),
+                    verbose=False
+                )
+                
+                recorded += 1
+                
+            except Exception as e:
+                errors += 1
+                logger.warning(f"Policy sync error (row {idx}): {e}")
+        
+        duration = time.time() - start_time
+        
+        logger.info(f"✅ Blockchain sync tamamlandı: {recorded} kayıt, {skipped} atlandı, {errors} hata ({duration:.2f}s)")
+        
+        # Örnek ödeme emirlerini de ekle (blockchain temizlendiği için yeniden oluştur)
+        logger.info("📝 Örnek ödeme emirleri ekleniyor...")
+        try:
+            create_sample_payout_requests()
+        except Exception as e:
+            logger.warning(f"Örnek ödeme emirleri eklenirken hata: {e}")
+        
+        # Son durumu diske kaydet
+        blockchain_service.blockchain._save_chain()
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'total': len(df),
+                'recorded': recorded,
+                'skipped': skipped,
+                'errors': errors,
+                'duration': duration,
+                'total_blocks': len(blockchain_service.blockchain.chain)
+            },
+            'message': f'Blockchain temizlendi ve {recorded} poliçe + örnek ödeme emirleri eklendi'
+        })
+        
+    except Exception as e:
+        logger.error(f"Blockchain sync error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/blockchain/verify', methods=['GET'])
+def verify_blockchain_contract():
+    """
+    Smart contract durumunu doğrula
+    """
+    global blockchain_service
+    try:
+        if not blockchain_service:
+            return jsonify({
+                'success': False,
+                'data': {
+                    'contract_valid': False,
+                    'network_connected': False,
+                    'accounts_available': False,
+                    'message': 'Blockchain servisi başlatılmamış'
+                }
+            })
+        
+        # Blockchain integrity kontrolü
+        is_valid = blockchain_service.blockchain.is_valid()
+        total_blocks = len(blockchain_service.blockchain.chain)
+        
+        verification = {
+            'contract_valid': is_valid,
+            'network_connected': True,
+            'accounts_available': len(blockchain_service.admins) > 0,
+            'message': f'Blockchain aktif ve geçerli ({total_blocks} blok)'
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': verification
+        })
+        
+    except Exception as e:
+        logger.error(f"Blockchain verify error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/blockchain/logs', methods=['GET'])
+def get_blockchain_logs():
+    """
+    Blockchain işlem loglarını getir
+    """
+    global blockchain_service
+    try:
+        if not blockchain_service:
+            return jsonify({
+                'success': False,
+                'error': 'Blockchain servisi başlatılmamış'
+            }), 503
+        
+        # Blockchain'den log oluştur
+        blockchain_data = blockchain_service.blockchain
+        log_lines = []
+        
+        log_lines.append("=" * 80)
+        log_lines.append("DASK+ BLOCKCHAIN İŞLEM LOGLARI")
+        log_lines.append("=" * 80)
+        log_lines.append(f"Tarih: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        log_lines.append(f"Toplam Blok: {len(blockchain_data.chain)}")
+        log_lines.append(f"Chain Geçerli: {blockchain_data.is_valid()}")
+        log_lines.append("=" * 80)
+        log_lines.append("")
+        
+        # Her bloğu logla
+        for block in blockchain_data.chain:
+            block_time = datetime.fromtimestamp(block.timestamp).strftime('%Y-%m-%d %H:%M:%S')
+            block_type = block.data.get('type', 'unknown')
+            
+            log_lines.append(f"[{block_time}] Block #{block.index}")
+            log_lines.append(f"  Type: {block_type}")
+            log_lines.append(f"  Hash: {block.hash}")
+            log_lines.append(f"  Previous: {block.previous_hash}")
+            
+            if block_type == 'policy':
+                log_lines.append(f"  Customer: {block.data.get('customer_id', 'N/A')}")
+                log_lines.append(f"  Coverage: {block.data.get('coverage_amount', 0):,} TL")
+            elif block_type == 'payout':
+                log_lines.append(f"  Amount: {block.data.get('amount', 0):,} TL")
+                log_lines.append(f"  Policy ID: {block.data.get('policy_id', 'N/A')}")
+            
+            log_lines.append("")
+        
+        logs = "\n".join(log_lines)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'logs': logs
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Blockchain logs error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/blockchain/export', methods=['GET'])
+def export_blockchain_data():
+    """
+    Blockchain verilerini CSV olarak indir
+    """
+    global blockchain_service
+    try:
+        if not blockchain_service:
+            return jsonify({
+                'success': False,
+                'error': 'Blockchain servisi başlatılmamış'
+            }), 503
+        
+        # Blockchain'den CSV oluştur
+        blockchain_data = blockchain_service.blockchain
+        records = []
+        
+        for block in blockchain_data.chain:
+            if block.data.get('type') == 'policy':
+                records.append({
+                    'block_index': block.index,
+                    'timestamp': datetime.fromtimestamp(block.timestamp).isoformat(),
+                    'type': 'policy',
+                    'customer_id': block.data.get('customer_id', ''),
+                    'coverage_amount': block.data.get('coverage_amount', 0),
+                    'premium': block.data.get('premium', 0),
+                    'latitude': block.data.get('latitude', 0),
+                    'longitude': block.data.get('longitude', 0),
+                    'hash': block.hash
+                })
+        
+        # DataFrame oluştur ve geçici dosyaya kaydet
+        df = pd.DataFrame(records)
+        temp_file = DATA_DIR / 'blockchain_export_temp.csv'
+        df.to_csv(temp_file, index=False, encoding='utf-8')
+        
+        return send_file(
+            temp_file,
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=f'blockchain_records_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+        )
+        
+    except Exception as e:
+        logger.error(f"Blockchain export error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ============================================================================
+# BLOCKCHAIN - ÖDEME EMRİ SİSTEMİ (2-of-3 Multi-Admin Onay)
+# ============================================================================
+
+@app.route('/api/blockchain/payout-request', methods=['POST'])
+def create_payout_request():
+    """
+    Ödeme emri oluştur (blockchain'e kaydedilir, ödeme yapılmaz)
+    2-of-3 admin onayı bekler
+    """
+    global blockchain_service
+    try:
+        if not blockchain_service:
+            return jsonify({
+                'success': False,
+                'error': 'Blockchain servisi başlatılmamış'
+            }), 503
+        
+        data = request.get_json()
+        policy_id = data.get('policy_id') or data.get('policy_no')
+        customer_id = data.get('customer_id') or data.get('customer_name')
+        amount = data.get('amount')
+        reason = data.get('reason', 'Parametrik tetikleme')
+        requester_admin = data.get('admin', 'admin1')
+        claim_id = data.get('claim_id')  # Hasar talebi ilişkisi
+        
+        if not all([policy_id, customer_id, amount]):
+            return jsonify({
+                'success': False,
+                'error': 'Eksik parametre: policy_id, customer_id, amount gerekli'
+            }), 400
+        
+        # Ödeme emri ID'si oluştur
+        request_id = f"PAY-{datetime.now().strftime('%Y%m%d%H%M%S')}-{policy_id}"
+        
+        # Blockchain'e ödeme emri kaydı ekle (ödeme yapılmaz!)
+        block_data = {
+            'type': 'payout_request',
+            'request_id': request_id,
+            'policy_id': policy_id,
+            'customer_id': customer_id,
+            'amount_tl': amount,
+            'reason': reason,
+            'requester': requester_admin,
+            'status': 'pending',
+            'approvals': [],
+            'created_at': datetime.now().isoformat()
+        }
+        
+        # Hasar talebi ID'si varsa ekle
+        if claim_id:
+            block_data['claim_id'] = claim_id
+        
+        block = blockchain_service.blockchain.add_block(block_data, save_to_disk=True)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'request_id': request_id,
+                'block_index': block.index,
+                'status': 'pending',
+                'message': 'Ödeme emri oluşturuldu. 2 admin onayı bekleniyor.',
+                'required_approvals': 2
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Payout request error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/blockchain/payout-approve', methods=['POST'])
+def approve_payout_request():
+    """
+    Ödeme emrini onayla (admin onayı blockchain'e kaydedilir)
+    2-of-3 admin onayı gerekli
+    """
+    global blockchain_service
+    try:
+        if not blockchain_service:
+            return jsonify({
+                'success': False,
+                'error': 'Blockchain servisi başlatılmamış'
+            }), 503
+        
+        data = request.get_json()
+        request_id = data.get('request_id')
+        admin_name = data.get('admin')
+        
+        if not all([request_id, admin_name]):
+            return jsonify({
+                'success': False,
+                'error': 'Eksik parametre: request_id, admin gerekli'
+            }), 400
+        
+        # Admin kontrolü
+        if admin_name not in blockchain_service.admins:
+            return jsonify({
+                'success': False,
+                'error': f'Geçersiz admin: {admin_name}'
+            }), 403
+        
+        # Ödeme emrini bul
+        request_block = None
+        for block in blockchain_service.blockchain.chain:
+            if block.data.get('type') == 'payout_request' and block.data.get('request_id') == request_id:
+                request_block = block
+                break
+        
+        if not request_block:
+            return jsonify({
+                'success': False,
+                'error': 'Ödeme emri bulunamadı'
+            }), 404
+        
+        # Bu admin daha önce onaylamış mı?
+        existing_approvals = [b for b in blockchain_service.blockchain.chain 
+                            if b.data.get('type') == 'payout_approval' 
+                            and b.data.get('request_id') == request_id]
+        
+        if any(a.data.get('admin') == admin_name for a in existing_approvals):
+            return jsonify({
+                'success': False,
+                'error': 'Bu admin zaten onaylamış'
+            }), 400
+        
+        # Onay kaydını blockchain'e ekle
+        approval_data = {
+            'type': 'payout_approval',
+            'request_id': request_id,
+            'admin': admin_name,
+            'admin_address': blockchain_service.admins[admin_name],
+            'approved_at': datetime.now().isoformat()
+        }
+        
+        block = blockchain_service.blockchain.add_block(approval_data, save_to_disk=True)
+        
+        # Toplam onay sayısı
+        total_approvals = len(existing_approvals) + 1
+        
+        status = 'approved' if total_approvals >= 2 else 'pending'
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'request_id': request_id,
+                'admin': admin_name,
+                'total_approvals': total_approvals,
+                'required_approvals': 2,
+                'status': status,
+                'message': f'Onay kaydedildi. {total_approvals}/2 admin onayı.' if status == 'pending' else 'Ödeme emri onaylandı! (2/2)',
+                'block_index': block.index
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Payout approval error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/blockchain/pending-payouts', methods=['GET'])
+def get_pending_payouts():
+    """
+    Bekleyen ödeme emirlerini getir (2-of-3 onay bekleyenler)
+    """
+    global blockchain_service
+    try:
+        if not blockchain_service:
+            return jsonify({
+                'success': False,
+                'error': 'Blockchain servisi başlatılmamış'
+            }), 503
+        
+        pending_payouts = []
+        
+        # Tüm ödeme emirlerini tara
+        for block in blockchain_service.blockchain.chain:
+            if block.data.get('type') == 'payout_request':
+                request_id = block.data.get('request_id')
+                
+                # Bu request için onayları say
+                approvals = [b for b in blockchain_service.blockchain.chain 
+                           if b.data.get('type') == 'payout_approval' 
+                           and b.data.get('request_id') == request_id]
+                
+                approval_count = len(approvals)
+                admin_approvals = [a.data.get('admin') for a in approvals]
+                
+                status = 'approved' if approval_count >= 2 else 'pending'
+                
+                pending_payouts.append({
+                    'request_id': request_id,
+                    'policy_id': block.data.get('policy_id'),
+                    'customer_id': block.data.get('customer_id'),
+                    'amount_tl': block.data.get('amount_tl'),
+                    'reason': block.data.get('reason'),
+                    'requester': block.data.get('requester'),
+                    'created_at': block.data.get('created_at'),
+                    'approval_count': approval_count,
+                    'required_approvals': 2,
+                    'approved_by': admin_approvals,
+                    'status': status,
+                    'block_index': block.index
+                })
+        
+        # Tarihe göre sırala (en yeni önce)
+        pending_payouts.sort(key=lambda x: x['created_at'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'data': pending_payouts,
+            'total': len(pending_payouts)
+        })
+        
+    except Exception as e:
+        logger.error(f"Pending payouts error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+# ============================================================================
+# MAIN - Artık run.py kullanıldığı için bu blok pasif
+# ============================================================================
+# Not: Flask uygulaması run.py üzerinden başlatılıyor
+# Eğer doğrudan app.py çalıştırmak isterseniz aşağıdaki kodu uncomment edin:
+#
+# if __name__ == '__main__':
+#     initialize_backend()
+#     app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)

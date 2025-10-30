@@ -377,7 +377,7 @@
                         <div class="pricing-badge popular">En Popüler</div>
                         <h3 class="pricing-title">Standart Paket</h3>
                         <div class="pricing-amount">
-                            <span class="amount">500,000</span>
+                            <span class="amount">750,000</span>
                             <span class="currency">TL</span>
                         </div>
                         <p class="pricing-desc">Kapsamlı koruma ve finansal güvence</p>
@@ -403,7 +403,7 @@
                         <div class="pricing-badge" style="background: linear-gradient(135deg, #8b5cf6, #6366f1);">Premium</div>
                         <h3 class="pricing-title">Premium Paket</h3>
                         <div class="pricing-amount">
-                            <span class="amount">1,000,000</span>
+                            <span class="amount">1,500,000</span>
                             <span class="currency">TL</span>
                         </div>
                         <p class="pricing-desc">Maksimum güvence ve tam koruma</p>
@@ -631,7 +631,7 @@
             customerLoginModal.style.display = 'flex';
             document.getElementById('customerEmail').focus();
         });
-        customerLoginBtn1.addEventListener('click', function (e) {
+        customerLoginBtn1.addEventListener('click', function(e) {
             e.preventDefault();
             customerLoginModal.style.display = 'flex';
             document.getElementById('customerEmail').focus();
@@ -659,43 +659,43 @@
             customerSuccessMsg.style.display = 'none';
 
             fetch('/api/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    email: email,
-                    password: password
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        password: password
+                    })
                 })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    localStorage.setItem('token', data.token);
-                    localStorage.setItem('customer_id', data.customer.customer_id);
-                    localStorage.setItem('customer_email', email);
-                    localStorage.setItem('customer_name', data.customer.full_name);
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        localStorage.setItem('token', data.token);
+                        localStorage.setItem('customer_id', data.customer.customer_id);
+                        localStorage.setItem('customer_email', email);
+                        localStorage.setItem('customer_name', data.customer.full_name);
 
-                    if (rememberMe) {
-                        localStorage.setItem('rememberMe', 'true');
+                        if (rememberMe) {
+                            localStorage.setItem('rememberMe', 'true');
+                        }
+
+                        customerSuccessMsg.textContent = '✓ Giriş başarılı! Dashboard\'a yönlendiriliyorsunuz...';
+                        customerSuccessMsg.style.display = 'block';
+
+                        setTimeout(() => {
+                            window.location.href = '/dashboard';
+                        }, 1500);
+                    } else {
+                        customerErrorMsg.textContent = '✗ ' + (data.error || 'Giriş başarısız. Lütfen tekrar deneyiniz.');
+                        customerErrorMsg.style.display = 'block';
                     }
-
-                    customerSuccessMsg.textContent = '✓ Giriş başarılı! Dashboard\'a yönlendiriliyorsunuz...';
-                    customerSuccessMsg.style.display = 'block';
-
-                    setTimeout(() => {
-                        window.location.href = '/dashboard';
-                    }, 1500);
-                } else {
-                    customerErrorMsg.textContent = '✗ ' + (data.error || 'Giriş başarısız. Lütfen tekrar deneyiniz.');
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    customerErrorMsg.textContent = '✗ Bir hata oluştu. Lütfen tekrar deneyiniz.';
                     customerErrorMsg.style.display = 'block';
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                customerErrorMsg.textContent = '✗ Bir hata oluştu. Lütfen tekrar deneyiniz.';
-                customerErrorMsg.style.display = 'block';
-            });
+                });
         });
 
         // Admin Giriş Modalı

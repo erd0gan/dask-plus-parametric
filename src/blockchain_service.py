@@ -279,7 +279,7 @@ class BlockchainService:
         latitude: float,
         longitude: float,
         premium: int,
-        package_type: str = "standard",
+        package_type: str = "Standart",
         verbose: bool = False
     ) -> int:
         """
