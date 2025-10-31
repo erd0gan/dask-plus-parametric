@@ -899,9 +899,6 @@ class AIRiskPricingModel:
         features.replace([np.inf, -np.inf], 0, inplace=True)
         features.fillna(0, inplace=True)
         
-        print(f"✨ Feature Engineering Tamamlandı: {len(features.columns)} sütun")
-        print(f"   📝 Not: Model eğitiminde 33 numerik + 7 encoded = 40 feature kullanılacak")
-        
         return features
     
     def train_risk_model(self, features_df):
@@ -1270,7 +1267,10 @@ class AIRiskPricingModel:
         
         GERÇEKTEn DİNAMİK:
         - Risk bazlı prim (sabit değil!)
-        - 0.6x - 1.8x Dinamik Faktör Aralığı
+        - PAKET BAZLI Dinamik Faktör Aralıkları:
+          * Temel Paket: 1.5x - 3.0x (daha yüksek primler)
+          * Standart Paket: 0.75x - 2.5x (orta seviye)
+          * Premium Paket: 0.75x - 2.0x (düşük primler)
         - 8 farklı risk faktörü entegrasyonu
         
         Returns:
@@ -1390,7 +1390,8 @@ class AIRiskPricingModel:
         final_risk_score = np.mean(risk_scores)
         final_risk_score = np.clip(final_risk_score, 0, 1)
         
-        # ADIM 4: İYİLEŞTİRİLMİŞ DİNAMİK FAKTÖR HESAPLA (Fine-Grained 0.6x-2.0x)
+        # ADIM 4: İYİLEŞTİRİLMİŞ DİNAMİK FAKTÖR HESAPLA (Paket Bazlı Dinamik Aralıklar)
+        # Temel: 1.5-3.0x, Standart: 0.75-2.5x, Premium: 0.75-2.0x
         
         building_age = building_features.get('building_age', 0)
         floors = building_features.get('floors', 1)
@@ -1401,94 +1402,120 @@ class AIRiskPricingModel:
         latitude = building_features.get('latitude', 41.0)
         longitude = building_features.get('longitude', 29.0)
         
-        # GELIŞMIŞ DİNAMİK FAKTÖR HESAPLAMA (0.6x - 2.0x geniş ve dengeli aralık)
-        # 1. MODEL RİSK FAKTÖRÜ (AI Tahmin) - 0.60 ile 1.80 arası (geniş)
-        model_risk_factor = 0.60 + (final_risk_score * 1.20)
+        # PAKET BAZLI ARALIK BELİRLEME
+        if final_package == 'temel':
+            # Temel paket: 1.5x - 3.0x (daha yüksek primler)
+            min_multiplier = 1.5
+            max_multiplier = 3.0
+            multiplier_range = 1.5  # 3.0 - 1.5
+        elif final_package == 'standard':
+            # Standart paket: 0.75x - 2.5x (orta)
+            min_multiplier = 0.75
+            max_multiplier = 2.5
+            multiplier_range = 1.75  # 2.5 - 0.75
+        else:  # premium
+            # Premium paket: 0.75x - 2.0x (en düşük primler)
+            min_multiplier = 0.75
+            max_multiplier = 2.0
+            multiplier_range = 1.25  # 2.0 - 0.75
         
-        # 2. BİNA YAŞI FAKTÖRÜ - 0.70 ile 1.60 arası (geniş)
+        # GELIŞMIŞ DİNAMİK FAKTÖR HESAPLAMA (Paket bazlı aralıklarda)
+        # 1. MODEL RİSK FAKTÖRÜ (AI Tahmin) - paket bazlı aralıkta
+        model_risk_factor = min_multiplier + (final_risk_score * multiplier_range)
+        
+        # 2. BİNA YAŞI FAKTÖRÜ - paket bazlı normalize edilmiş
         if building_age < 3:
-            age_factor = 0.70
+            age_normalized = 0.0
         elif building_age < 7:
-            age_factor = 0.80
+            age_normalized = 0.15
         elif building_age < 12:
-            age_factor = 0.90
+            age_normalized = 0.30
         elif building_age < 18:
-            age_factor = 1.00
+            age_normalized = 0.45
         elif building_age < 25:
-            age_factor = 1.15
+            age_normalized = 0.60
         elif building_age < 35:
-            age_factor = 1.30
+            age_normalized = 0.75
         elif building_age < 50:
-            age_factor = 1.45
+            age_normalized = 0.90
         else:
-            age_factor = 1.60
+            age_normalized = 1.0
         
-        # 3. KAT SAYISI FAKTÖRÜ - 0.75 ile 1.50 arası (geniş)
+        age_factor = min_multiplier + (age_normalized * multiplier_range)
+        
+        # 3. KAT SAYISI FAKTÖRÜ - paket bazlı normalize edilmiş
         if floors <= 2:
-            floor_factor = 0.75
+            floor_normalized = 0.0
         elif floors <= 4:
-            floor_factor = 0.85
+            floor_normalized = 0.20
         elif floors <= 6:
-            floor_factor = 1.00
+            floor_normalized = 0.40
         elif floors <= 10:
-            floor_factor = 1.15
+            floor_normalized = 0.60
         elif floors <= 15:
-            floor_factor = 1.30
+            floor_normalized = 0.75
         elif floors <= 20:
-            floor_factor = 1.42
+            floor_normalized = 0.90
         else:
-            floor_factor = 1.50
+            floor_normalized = 1.0
         
-        # 4. YAPI TİPİ FAKTÖRÜ - 0.65 ile 1.70 arası (geniş)
+        floor_factor = min_multiplier + (floor_normalized * multiplier_range)
+        
+        # 4. YAPI TİPİ FAKTÖRÜ - paket bazlı normalize edilmiş
         structure_lower = structure_type.lower() if structure_type else ''
         
         if 'celik' in structure_lower or 'çelik' in structure_lower:
-            structure_factor = 0.65
+            structure_normalized = 0.0
         elif 'cok_yeni' in structure_lower or 'çok yeni' in structure_lower:
-            structure_factor = 0.75
+            structure_normalized = 0.15
         elif 'yeni' in structure_lower:
-            structure_factor = 0.88
+            structure_normalized = 0.35
         elif 'orta' in structure_lower:
-            structure_factor = 1.05
+            structure_normalized = 0.55
         elif 'eski' in structure_lower:
-            structure_factor = 1.35
+            structure_normalized = 0.80
         elif 'yigma' in structure_lower or 'yığma' in structure_lower:
-            structure_factor = 1.70
+            structure_normalized = 1.0
         else:
-            structure_factor = 1.00
+            structure_normalized = 0.50
         
-        # 5. ZEMİN TİPİ FAKTÖRÜ - 0.75 ile 1.60 arası (geniş)
+        structure_factor = min_multiplier + (structure_normalized * multiplier_range)
+        
+        # 5. ZEMİN TİPİ FAKTÖRÜ - paket bazlı normalize edilmiş
         soil_lower = soil_type.lower() if soil_type else ''
         
         if 'a' in soil_lower or 'sağlam kaya' in soil_lower or 'sagla' in soil_lower:
-            soil_factor = 0.75
+            soil_normalized = 0.0
         elif 'b' in soil_lower or 'kaya' in soil_lower:
-            soil_factor = 0.85
+            soil_normalized = 0.20
         elif 'c' in soil_lower or 'sert' in soil_lower:
-            soil_factor = 1.00
+            soil_normalized = 0.45
         elif 'd' in soil_lower or 'yumuşak' in soil_lower or 'yumusak' in soil_lower:
-            soil_factor = 1.25
+            soil_normalized = 0.75
         elif 'e' in soil_lower or 'çok yumuşak' in soil_lower or 'cok yumusak' in soil_lower:
-            soil_factor = 1.60
+            soil_normalized = 1.0
         else:
-            soil_factor = 1.00
+            soil_normalized = 0.45
         
-        # 6. BİNA BÜYÜKLÜĞÜ FAKTÖRÜ - 0.88 ile 1.20 arası (geniş)
+        soil_factor = min_multiplier + (soil_normalized * multiplier_range)
+        
+        # 6. BİNA BÜYÜKLÜĞÜ FAKTÖRÜ - paket bazlı normalize edilmiş
         if building_area < 80:
-            area_factor = 0.88
+            area_normalized = 0.0
         elif building_area < 150:
-            area_factor = 0.94
+            area_normalized = 0.20
         elif building_area < 250:
-            area_factor = 1.00
+            area_normalized = 0.40
         elif building_area < 400:
-            area_factor = 1.06
+            area_normalized = 0.60
         elif building_area < 600:
-            area_factor = 1.12
+            area_normalized = 0.80
         else:
-            area_factor = 1.20
+            area_normalized = 1.0
         
-        # 7. SİSMİK RİSK FAKTÖRÜ (GERÇEK DEPREM VERİSİ) - 0.80 ile 1.40 arası (geniş)
-        seismic_risk_factor = 1.0
+        area_factor = min_multiplier + (area_normalized * multiplier_range)
+        
+        # 7. SİSMİK RİSK FAKTÖRÜ (GERÇEK DEPREM VERİSİ) - paket bazlı normalize edilmiş
         seismic_risk_score = 0.5
         
         if seismic_analyzer is not None:
@@ -1501,35 +1528,39 @@ class AIRiskPricingModel:
                     seismic_risk_score = seismic_analyzer.get_location_seismic_risk(
                         latitude_val, longitude_val, distance_to_fault
                     )
-                    # 0.80 - 1.40 arası faktör (geniş aralık)
-                    seismic_risk_factor = 0.80 + (seismic_risk_score * 0.60)
                 except:
                     pass
         
-        # 8. SİGORTA DEĞERİ FAKTÖRÜ - 0.92 ile 1.12 arası (geniş)
-        if insurance_value < 600_000:
-            value_factor = 1.12
-        elif insurance_value < 1_200_000:
-            value_factor = 1.00
-        elif insurance_value < 2_500_000:
-            value_factor = 0.96
-        else:
-            value_factor = 0.92
+        # Sismik riski paket bazlı aralığa çevir
+        seismic_risk_factor = min_multiplier + (seismic_risk_score * multiplier_range)
         
-        # ADIM 5: FAKTÖRLERI BİRLEŞTİR - Çarpımsal Model (GENİŞ dağılım 0.6x-2.0x için üsleri artırdık)
+        # 8. SİGORTA DEĞERİ FAKTÖRÜ - paket bazlı normalize edilmiş (ters orantılı)
+        if insurance_value < 600_000:
+            value_normalized = 0.60  # Yüksek değer = düşük çarpan
+        elif insurance_value < 1_200_000:
+            value_normalized = 0.50
+        elif insurance_value < 2_500_000:
+            value_normalized = 0.40
+        else:
+            value_normalized = 0.30
+        
+        value_factor = min_multiplier + (value_normalized * multiplier_range)
+        
+        # ADIM 5: FAKTÖRLERI BİRLEŞTİR - Çarpımsal Model (Paket bazlı dinamik)
         combined_risk_factor = (
-            (model_risk_factor ** 0.35) *  # AI modeli (ÜST ARTIRILDI - ana faktör)
-            (structure_factor ** 0.28) *    # Yapı tipi (ÜST ARTIRILDI - çok önemli)
-            (soil_factor ** 0.25) *         # Zemin (ÜST ARTIRILDI - çok önemli)
-            (age_factor ** 0.20) *          # Yaş (ÜST ARTIRILDI - önemli)
-            (seismic_risk_factor ** 0.18) * # Sismik risk (ÜST ARTIRILDI)
-            (floor_factor ** 0.10) *        # Kat sayısı (ÜST ARTIRILDI)
-            (area_factor ** 0.05) *         # Alan (ÜST ARTIRILDI)
-            (value_factor ** 0.05)          # Değer (ÜST ARTIRILDI)
+            (model_risk_factor ** 0.35) *  # AI modeli (ana faktör)
+            (structure_factor ** 0.28) *    # Yapı tipi (çok önemli)
+            (soil_factor ** 0.25) *         # Zemin (çok önemli)
+            (age_factor ** 0.20) *          # Yaş (önemli)
+            (seismic_risk_factor ** 0.18) * # Sismik risk
+            (floor_factor ** 0.10) *        # Kat sayısı
+            (area_factor ** 0.05) *         # Alan
+            (value_factor ** 0.05)          # Değer
         )
         
-        # 0.6-2.0 aralığına kısıtla (geniş ve dengeli dağılım)
-        combined_risk_factor = np.clip(combined_risk_factor, 0.6, 2.0)
+        # Paket bazlı aralığa kısıtla
+        # Temel: 1.5-3.0x, Standart: 0.75-2.5x, Premium: 0.75-2.0x
+        combined_risk_factor = np.clip(combined_risk_factor, min_multiplier, max_multiplier)
         
         # ADIM 6: PRİM HESAPLA - Paket bağımsız, risk bazlı gerçek hesaplama
         # Her paketin base rate'i aynı (%1.0), tek fark teminat miktarı

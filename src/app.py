@@ -134,7 +134,6 @@ class KandilliEarthquakeService:
                 except UnicodeDecodeError:
                     content = response.content.decode('iso-8859-9', errors='ignore')
                 
-                logger.info(f"Kandilli - Content encoding: {response.encoding}")
                 return self.parse_earthquake_data(content, min_magnitude, limit)
             else:
                 logger.error(f"Kandilli API hatası: {response.status_code}")
@@ -512,26 +511,23 @@ def recalculate_all_premiums_with_ai(buildings_df, pricing_system):
             # AI risk skoru
             ai_risk = predicted_risks[idx]
             
-            # Base rate paket tipine göre
-            base_rate = {
-                'Temel': 0.005,
-                'Standart': 0.008,
-                'Premium': 0.012
-            }.get(package_type, 0.005)
+            # Base rate TÜM PAKETLER İÇİN AYNI (%1.0)
+            base_rate = 0.0100
             
-            # AI risk multiplier (0.6x - 2.0x arası)
-            if ai_risk < 0.2:
-                risk_multiplier = 0.6
-            elif ai_risk < 0.4:
-                risk_multiplier = 0.8 + (ai_risk - 0.2) * 1.0  # 0.8 - 1.0
-            elif ai_risk < 0.6:
-                risk_multiplier = 1.0 + (ai_risk - 0.4) * 1.5  # 1.0 - 1.3
-            elif ai_risk < 0.8:
-                risk_multiplier = 1.3 + (ai_risk - 0.6) * 2.5  # 1.3 - 1.8
-            else:
-                risk_multiplier = 1.8 + (ai_risk - 0.8) * 1.0  # 1.8 - 2.0
-            
-            risk_multiplier = min(max(risk_multiplier, 0.6), 2.0)
+            # AI risk multiplier - PAKET BAZLI ARALIKLAR
+            # Temel: 1.5-3.0x, Standart: 0.75-2.5x, Premium: 0.75-2.0x
+            if package_type == 'Temel':
+                # Temel paket: 1.5 - 3.0x (daha yüksek primler)
+                risk_multiplier = 1.5 + (ai_risk * 1.5)  # 1.5-3.0 aralığı
+                risk_multiplier = min(max(risk_multiplier, 1.5), 3.0)
+            elif package_type == 'Standart':
+                # Standart paket: 0.75 - 2.5x (orta)
+                risk_multiplier = 0.75 + (ai_risk * 1.75)  # 0.75-2.5 aralığı
+                risk_multiplier = min(max(risk_multiplier, 0.75), 2.5)
+            else:  # Premium
+                # Premium paket: 0.75 - 2.0x (en düşük primler)
+                risk_multiplier = 0.75 + (ai_risk * 1.25)  # 0.75-2.0 aralığı
+                risk_multiplier = min(max(risk_multiplier, 0.75), 2.0)
             
             # Final prim hesaplama
             annual_premium = base_coverage * base_rate * risk_multiplier
@@ -861,9 +857,7 @@ def get_earthquakes():
         if kandilli_service:
             earthquakes = kandilli_service.fetch_earthquakes(min_magnitude, limit)
             
-            if earthquakes and len(earthquakes) > 0:
-                logger.info(f"✅ Kandilli'den {len(earthquakes)} deprem verisi alındı")
-                
+            if earthquakes and len(earthquakes) > 0:                
                 # ✨ BLOCKCHAIN'E KAYDET (Asenkron - Manager) ✨
                 if blockchain_manager and blockchain_manager.enabled:
                     for eq in earthquakes:
@@ -1470,7 +1464,6 @@ def get_customers():
             
             customers_cache = list(customers_dict.values())
             customers_cache_timestamp = now
-            logger.info(f'Müşteri cache güncellendi: {len(customers_cache)} müşteri')
         
         customers_list = customers_cache
         
