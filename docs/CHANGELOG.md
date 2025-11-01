@@ -157,5 +157,5 @@ Versiyonlar MAJOR.MINOR.PATCH formatındadır:
 
 ---
 
-[2.0.0]: https://github.com/[kullanici-adi]/dask-plus-parametrik/releases/tag/v2.0.0
-[1.0.0]: https://github.com/[kullanici-adi]/dask-plus-parametrik/releases/tag/v1.0.0
+[2.0.0]: https://github.com/erd0gan/dask-plus-parametrik/releases/tag/v2.0.0
+[1.0.0]: https://github.com/erd0gan/dask-plus-parametrik/releases/tag/v1.0.0

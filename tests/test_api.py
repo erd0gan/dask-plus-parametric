@@ -11,7 +11,7 @@ import json
 BASE_URL = "http://localhost:5000"
 
 # Demo Account
-DEMO_EMAIL = "ali.yılmaz0@email.com"
+DEMO_EMAIL = "ali.yilmaz0@email.com"
 DEMO_PASSWORD = "dask2024"
 
 def test_customer_endpoint():
