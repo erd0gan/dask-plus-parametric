@@ -12,6 +12,16 @@
 
 ---
 
+**🏆 Winner of the Neova Ideathon Competition (1st Place) 🏆**
+
+This project is the proud winner of the 1st place award at the Neova Ideathon competition. This achievement validates the innovative approach and potential of our project.
+
+**🏆 Neova Ideathon Yarışması Birincilik Ödülü Sahibi 🏆**
+
+Bu proje, Neova Ideathon yarışmasında birincilik ödülünü kazanmıştır. Bu başarı, projemizin yenilikçi yaklaşımını ve potansiyelini bir kez daha kanıtlamıştır.
+
+---
+
 ## 🇹🇷 Türkçe
 
 ### 📋 Genel Bakış
